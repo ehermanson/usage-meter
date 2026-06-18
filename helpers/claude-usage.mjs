@@ -1,0 +1,93 @@
+#!/usr/bin/env node
+// Reads Claude plan usage the same way Relay does: via the Claude Agent SDK's
+// experimental get_usage control request over a warm Claude Code subprocess.
+// Prints a single JSON line to stdout and exits.
+//
+//   { "ok": true,  "rate_limits": { "five_hour": { "utilization": 4, "resets_at": "..." }, ... },
+//                  "subscription_type": "..." }
+//   { "ok": false, "error": "Rate limited. Please try again later.", "code": "rate_limit_error" }
+
+const OVERALL_TIMEOUT_MS = 35_000;
+
+function emit(obj) {
+  process.stdout.write(JSON.stringify(obj) + "\n");
+}
+
+function fail(message, code, subscription) {
+  emit({
+    ok: false,
+    error: String(message ?? "unknown error"),
+    code: code ?? null,
+    subscription_type: subscription ?? null,
+  });
+  process.exit(0);
+}
+
+// Hard watchdog so the helper can never hang the menu-bar app.
+const watchdog = setTimeout(() => fail("Timed out reading Claude usage", "timeout"), OVERALL_TIMEOUT_MS);
+
+async function resolveStartup() {
+  // Prefer a locally installed SDK; fall back to Relay's copy if present.
+  const candidates = [
+    "@anthropic-ai/claude-agent-sdk",
+    "/Users/erichermanson/projects/relay/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs",
+  ];
+  let lastErr;
+  for (const spec of candidates) {
+    try {
+      const mod = await import(spec);
+      if (typeof mod.startup === "function") return mod.startup;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw new Error(`Claude Agent SDK not found: ${lastErr?.message ?? "unknown"}`);
+}
+
+async function main() {
+  const startup = await resolveStartup();
+  const warm = await startup({ initializeTimeoutMs: 30_000 });
+
+  // A prompt iterable that never yields keeps the query handle open long enough
+  // to issue the usage control request, exactly like Relay's PromptQueue.
+  async function* idlePrompt() {
+    await new Promise(() => {});
+  }
+  const handle = warm.query(idlePrompt());
+
+  try {
+    const getUsage = handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    if (typeof getUsage !== "function") {
+      return fail("SDK too old: get_usage not available", "unsupported");
+    }
+    const snap = await getUsage.call(handle);
+
+    if (snap?.error) {
+      return fail(snap.error.message ?? "usage error", snap.error.type ?? "error");
+    }
+    const limits = snap?.rate_limits;
+    const subscription = snap?.subscription_type ?? snap?.subscriptionType ?? null;
+    if (!limits || typeof limits !== "object") {
+      // rate_limits_available:true but rate_limits:null means the usage endpoint
+      // is momentarily throttled — a soft, retryable state, not a hard failure.
+      const code = snap?.rate_limits_available ? "throttled" : "empty";
+      const msg =
+        code === "throttled"
+          ? "Usage temporarily throttled"
+          : "No rate-limit data in usage snapshot";
+      return fail(msg, code, subscription);
+    }
+
+    clearTimeout(watchdog);
+    emit({ ok: true, rate_limits: limits, subscription_type: subscription });
+  } finally {
+    try {
+      await handle.close();
+    } catch {
+      /* ignore */
+    }
+  }
+  process.exit(0);
+}
+
+main().catch((err) => fail(err?.message ?? err, "exception"));

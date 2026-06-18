@@ -16,6 +16,10 @@ struct ProviderUsage: Identifiable {
     let name: String              // "Claude", "Codex"
     var windows: [UsageWindow]
     var error: String?
+    var plan: String?             // "max", "Pro", "prolite", …
+    /// A soft, retryable failure (e.g. usage endpoint momentarily throttled) —
+    /// the store keeps showing the last good values when this is set.
+    var retryable: Bool = false
 
     /// The primary (5h) window, used for the compact menu-bar title.
     var fiveHour: UsageWindow? {
@@ -23,8 +27,9 @@ struct ProviderUsage: Identifiable {
             ?? windows.first
     }
 
-    static func failed(_ name: String, _ message: String) -> ProviderUsage {
-        ProviderUsage(name: name, windows: [], error: message)
+    static func failed(_ name: String, _ message: String,
+                       retryable: Bool = false, plan: String? = nil) -> ProviderUsage {
+        ProviderUsage(name: name, windows: [], error: message, plan: plan, retryable: retryable)
     }
 }
 

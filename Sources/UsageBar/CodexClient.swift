@@ -77,29 +77,11 @@ enum CodexClient {
     // MARK: - Locate the codex binary
 
     private static func findCodex() -> String? {
-        let candidates = [
+        ProcessTools.findExecutable("codex", candidates: [
             "/opt/homebrew/bin/codex",
             "/usr/local/bin/codex",
             "\(NSHomeDirectory())/.local/bin/codex",
-        ]
-        for c in candidates where FileManager.default.isExecutableFile(atPath: c) {
-            return c
-        }
-        // Fall back to a login-shell PATH lookup.
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        p.arguments = ["-lc", "command -v codex"]
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = Pipe()
-        try? p.run()
-        p.waitUntilExit()
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let path, !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
-            return path
-        }
-        return nil
+        ])
     }
 }
 

@@ -45,7 +45,7 @@ struct MenuContentView: View {
                 .foregroundStyle(.tertiary)
             Spacer()
             Button {
-                Task { await store.refresh() }
+                Task { await store.refresh(force: true) }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
@@ -71,18 +71,30 @@ private struct ProviderRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(provider.name)
-                .font(.system(size: 12, weight: .semibold))
-
-            if let error = provider.error {
-                Text(error)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                ForEach(provider.windows) { window in
-                    WindowBar(window: window)
+            HStack(spacing: 6) {
+                Text(provider.name)
+                    .font(.system(size: 12, weight: .semibold))
+                if let plan = provider.plan {
+                    Text(plan)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.secondary.opacity(0.15), in: Capsule())
                 }
+            }
+
+            ForEach(provider.windows) { window in
+                WindowBar(window: window)
+            }
+
+            // A note shown alongside windows means we're displaying a stale
+            // value; with no windows it's a hard error.
+            if let note = provider.error {
+                Text(note)
+                    .font(.system(size: 10))
+                    .foregroundStyle(provider.windows.isEmpty ? .red : .orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

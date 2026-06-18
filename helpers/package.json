@@ -1,0 +1,10 @@
+{
+  "name": "usage-bar-helpers",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Node helper that reads Claude usage via the Claude Agent SDK (same path Relay uses).",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.170"
+  }
+}
