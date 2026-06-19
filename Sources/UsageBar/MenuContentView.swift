@@ -24,12 +24,12 @@ struct MenuContentView: View {
 
             Menu {
                 Button { store.setPinned(nil) } label: {
-                    pickerRow("Auto (peak)", checked: store.pinnedKey == nil)
+                    pickerRow("Auto (peak)", checked: store.pinnedProvider == nil)
                 }
-                if !store.selectableWindows.isEmpty { Divider() }
-                ForEach(store.selectableWindows) { item in
-                    Button { store.setPinned(item.key) } label: {
-                        pickerRow(item.display, checked: store.pinnedKey == item.key)
+                if !store.selectableProviders.isEmpty { Divider() }
+                ForEach(store.selectableProviders, id: \.self) { name in
+                    Button { store.setPinned(name) } label: {
+                        pickerRow(name, checked: store.pinnedProvider == name)
                     }
                 }
             } label: {

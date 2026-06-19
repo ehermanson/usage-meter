@@ -22,6 +22,13 @@ if CommandLine.arguments.contains("--selftest") {
                 print("  note: \(err)")
             }
         }
+        print("--- menu bar title (per provider) ---")
+        for p in [claude, codex] where p.hasWindows {
+            var parts: [String] = []
+            if let f = p.fiveHour { parts.append("5hr: \(Format.percent(f.usedPercent))") }
+            if let w = p.weekly { parts.append("Weekly \(Format.percent(w.usedPercent))") }
+            print("  \(p.name)  \(parts.joined(separator: " | "))")
+        }
         sem.signal()
     }
     sem.wait()

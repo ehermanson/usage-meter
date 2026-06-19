@@ -37,6 +37,16 @@ struct ProviderUsage: Identifiable {
             ?? allWindows.first
     }
 
+    /// The primary weekly window (the broad "all" pool, not a model-scoped one).
+    var weekly: UsageWindow? {
+        allWindows.first {
+            $0.label.localizedCaseInsensitiveContains("week")
+                || $0.label.localizedCaseInsensitiveContains("7d")
+        }
+    }
+
+    var hasWindows: Bool { !allWindows.isEmpty }
+
     static func ok(_ name: String, pools: [UsagePool], plan: String? = nil) -> ProviderUsage {
         ProviderUsage(name: name, pools: pools, error: nil, plan: plan)
     }
