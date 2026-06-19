@@ -52,6 +52,21 @@ final class UsageStore: ObservableObject {
 
     /// Full: "Claude  5hr: 7% | Weekly 31%". Compact: "Claude  5hr: 7%".
     /// With a single provider the name is dropped (e.g. "5hr: 7% | Weekly 31%").
+    /// A gauge whose needle reflects the menu-bar provider's 5hr usage.
+    /// Stays monochrome (uncolored) — only the dropdown bars use color.
+    var menuBarIcon: String {
+        guard let pct = menuBarProvider?.fiveHour?.usedPercent else {
+            return "gauge.with.dots.needle.bottom.50percent"
+        }
+        switch pct {
+        case ..<20: return "gauge.with.dots.needle.0percent"
+        case ..<40: return "gauge.with.dots.needle.33percent"
+        case ..<60: return "gauge.with.dots.needle.50percent"
+        case ..<80: return "gauge.with.dots.needle.67percent"
+        default:    return "gauge.with.dots.needle.100percent"
+        }
+    }
+
     var menuBarTitle: String {
         guard let p = menuBarProvider else { return "—" }
         var parts: [String] = []
