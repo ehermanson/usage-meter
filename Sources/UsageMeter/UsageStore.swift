@@ -20,13 +20,67 @@ final class UsageStore {
         didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
     }
 
-    /// Claude's usage endpoint is itself rate-limited, so probe it sparingly.
-    private let claudeMinInterval: TimeInterval = 300
+    /// Claude's usage endpoint is itself rate-limited and answers "throttled"
+    /// when probed too often — so retrying hard only keeps it throttled. After a
+    /// success we settle to `claudeSuccessInterval`; after a failure we back off
+    /// exponentially from `claudeBackoffBase` up to `claudeBackoffMax` to give the
+    /// endpoint room to recover instead of hammering it.
+    private let claudeSuccessInterval: TimeInterval = 300
+    private let claudeBackoffBase: TimeInterval = 180
+    private let claudeBackoffMax: TimeInterval = 900
     private var claudeLastAttempt: Date?
+    private var claudeFailureStreak = 0
 
-    /// Last successful snapshots, shown when a refresh fails/throttles.
-    private var lastGoodClaude: ProviderUsage?
-    private var lastGoodCodex: ProviderUsage?
+    /// Last successful snapshots, shown when a refresh fails/throttles. Persisted
+    /// across launches so a cold start (with a throttled endpoint) shows the last
+    /// known values instead of a blank "no data" row.
+    private var lastGoodClaude: ProviderUsage? { didSet { persistLastGood() } }
+    private var lastGoodCodex: ProviderUsage? { didSet { persistLastGood() } }
+
+    private enum PersistKey {
+        static let claude = "lastGoodClaude.v1"
+        static let codex = "lastGoodCodex.v1"
+        static let updated = "lastGoodUpdated.v1"
+    }
+
+    /// Set while seeding from disk so the `didSet` hooks don't re-persist (and
+    /// clobber the saved timestamp) during load.
+    private var isLoadingPersisted = false
+
+    private init() { loadLastGood() }
+
+    /// Seed `lastGood*` and the visible rows from disk so the menu has data the
+    /// instant it opens, before the first (possibly throttled) probe returns.
+    private func loadLastGood() {
+        isLoadingPersisted = true
+        defer { isLoadingPersisted = false }
+        let defaults = UserDefaults.standard
+        let decoder = JSONDecoder()
+        if let data = defaults.data(forKey: PersistKey.claude) {
+            lastGoodClaude = try? decoder.decode(ProviderUsage.self, from: data)
+        }
+        if let data = defaults.data(forKey: PersistKey.codex) {
+            lastGoodCodex = try? decoder.decode(ProviderUsage.self, from: data)
+        }
+        let seeded = [lastGoodClaude, lastGoodCodex].compactMap { $0 }
+        if !seeded.isEmpty {
+            providers = seeded
+            lastUpdated = defaults.object(forKey: PersistKey.updated) as? Date
+        }
+    }
+
+    private func persistLastGood() {
+        guard !isLoadingPersisted else { return }
+        let defaults = UserDefaults.standard
+        let encoder = JSONEncoder()
+        if let claude = lastGoodClaude, let data = try? encoder.encode(claude) {
+            defaults.set(data, forKey: PersistKey.claude)
+        }
+        if let codex = lastGoodCodex, let data = try? encoder.encode(codex) {
+            defaults.set(data, forKey: PersistKey.codex)
+        }
+        defaults.set(Date.now, forKey: PersistKey.updated)
+    }
 
     private var timer: Timer?
 
@@ -129,11 +183,16 @@ final class UsageStore {
         // Codex is cheap/local — always refresh it.
         async let codexResult = CodexClient.fetch()
 
-        // Claude is throttled to protect its rate-limited usage endpoint.
+        // Probe Claude only when due. After a success that's a calm 5-min cadence;
+        // after consecutive failures it's an exponential back-off so we stop
+        // hammering an endpoint that's telling us it's throttled.
+        let claudeInterval: TimeInterval = claudeFailureStreak == 0
+            ? claudeSuccessInterval
+            : min(claudeBackoffBase * pow(2, Double(claudeFailureStreak - 1)), claudeBackoffMax)
         let claudeDue: Bool = if force {
             true
         } else if let last = claudeLastAttempt {
-            Date.now.timeIntervalSince(last) >= claudeMinInterval
+            Date.now.timeIntervalSince(last) >= claudeInterval
         } else {
             true // never attempted yet
         }
@@ -144,6 +203,7 @@ final class UsageStore {
         let claude: ProviderUsage
         if let fresh = await claudeResult {
             claude = resolve(fresh, lastGood: &lastGoodClaude)
+            claudeFailureStreak = fresh.allWindows.isEmpty ? claudeFailureStreak + 1 : 0
         } else {
             claude = lastGoodClaude ?? .failed("Claude", "Updating…", retryable: true)
         }
