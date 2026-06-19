@@ -54,7 +54,10 @@ final class UsageStore {
 
     func setPinned(_ provider: String?) { pinnedProvider = provider }
 
-    var pinnedDisplayLabel: String { pinnedProvider ?? "Auto (peak)" }
+    /// Label for the "pick whichever provider is closest to its limit" option.
+    static let autoLabel = "Auto (highest)"
+
+    var pinnedDisplayLabel: String { pinnedProvider ?? Self.autoLabel }
 
     /// The provider shown in the menu bar: the pinned one, else the highest 5h.
     private var menuBarProvider: ProviderUsage? {
@@ -82,14 +85,14 @@ final class UsageStore {
         }
     }
 
-    /// Full: "Claude  5hr: 7% | Weekly 31%". Compact: "Claude  5hr: 7%".
-    /// With a single provider the name is dropped (e.g. "5hr: 7% | Weekly 31%").
+    /// Full: "Claude  5h 7% · Wk 31%". Compact: "Claude  5h 7%".
+    /// With a single provider the name is dropped (e.g. "5h 7% · Wk 31%").
     var menuBarTitle: String {
         guard let p = menuBarProvider else { return "—" }
         var parts: [String] = []
-        if let f = p.fiveHour { parts.append("5hr: \(Format.percent(f.usedPercent))") }
-        if !compactMenuBar, let w = p.weekly { parts.append("Weekly \(Format.percent(w.usedPercent))") }
-        let body = parts.joined(separator: " | ")
+        if let f = p.fiveHour { parts.append("5h \(Format.percent(f.usedPercent))") }
+        if !compactMenuBar, let w = p.weekly { parts.append("Wk \(Format.percent(w.usedPercent))") }
+        let body = parts.joined(separator: " · ")
         if body.isEmpty { return p.name }
         // Only label the provider when more than one is available.
         return selectableProviders.count > 1 ? "\(p.name)  \(body)" : body

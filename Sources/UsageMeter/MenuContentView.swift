@@ -66,7 +66,7 @@ struct MenuContentView: View {
     private var menuBarPicker: some View {
         Menu {
             Button { store.setPinned(nil) } label: {
-                pickerRow("Auto (peak)", checked: store.pinnedProvider == nil)
+                pickerRow(UsageStore.autoLabel, checked: store.pinnedProvider == nil)
             }
             if !store.selectableProviders.isEmpty { Divider() }
             ForEach(store.selectableProviders, id: \.self) { name in
@@ -76,40 +76,39 @@ struct MenuContentView: View {
             }
         } label: {
             Label("Menu bar: \(store.pinnedDisplayLabel)", systemImage: "pin")
+                .font(.system(size: 11))
         }
         .menuStyle(.borderlessButton)
-        .font(.system(size: 11))
+        .controlSize(.small)
     }
 
     private var footer: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             updatedLabel
 
             Button("Refresh", systemImage: "arrow.clockwise", action: refreshNow)
                 .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
                 .disabled(store.isLoading)
                 .help("Refresh now")
 
             Spacer()
 
             Button("Quit", action: quit)
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
         }
+        // Style the row once so the timestamp and both buttons stay consistent.
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .buttonStyle(.borderless)
+        .controlSize(.small)
     }
 
     @ViewBuilder
     private var updatedLabel: some View {
-        Group {
-            if let updated = store.lastUpdated {
-                Text("Updated \(updated, format: .dateTime.hour().minute().second())")
-            } else {
-                Text("—")
-            }
+        if let updated = store.lastUpdated {
+            Text("Updated \(updated, format: .dateTime.hour().minute().second())")
+        } else {
+            Text("—")
         }
-        .font(.system(size: 11))
-        .foregroundStyle(.tertiary)
     }
 
     @ViewBuilder
