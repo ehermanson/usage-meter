@@ -62,7 +62,7 @@ final class UsageStore: ObservableObject {
     /// Prefer fresh windows; otherwise fall back to the last good snapshot and
     /// annotate it as stale rather than blanking the row.
     private func resolve(_ fresh: ProviderUsage, lastGood: inout ProviderUsage?) -> ProviderUsage {
-        if !fresh.windows.isEmpty {
+        if !fresh.allWindows.isEmpty {
             lastGood = fresh
             return fresh
         }
@@ -70,7 +70,7 @@ final class UsageStore: ObservableObject {
         let note = fresh.retryable ? "throttled — showing last value" : (fresh.error ?? "stale")
         return ProviderUsage(
             name: prev.name,
-            windows: prev.windows,
+            pools: prev.pools,
             error: note,
             plan: prev.plan ?? fresh.plan,
             retryable: fresh.retryable

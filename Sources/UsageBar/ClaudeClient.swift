@@ -54,22 +54,52 @@ enum ClaudeClient {
 
     // MARK: - Parsing (rate_limits shares the /api/oauth/usage shape)
 
+    /// Friendly labels + display order for known window keys. Any other key that
+    /// looks like a window (numeric `utilization` + `resets_at`) is still shown.
+    private static let knownLabels: [(key: String, label: String)] = [
+        ("five_hour", "5h"),
+        ("seven_day", "Weekly · all"),
+        ("seven_day_opus", "Weekly · Opus"),
+        ("seven_day_sonnet", "Weekly · Sonnet"),
+        ("seven_day_oauth_apps", "Weekly · apps"),
+        ("seven_day_cowork", "Weekly · cowork"),
+        ("overage", "Overage"),
+    ]
+
     private static func parse(_ limits: [String: Any], plan: String?) -> ProviderUsage {
         var windows: [UsageWindow] = []
-        if let w = window(limits["five_hour"], label: "5h") { windows.append(w) }
-        if let w = window(limits["seven_day"], label: "7d") { windows.append(w) }
-        if let w = window(limits["seven_day_opus"], label: "7d Opus") { windows.append(w) }
+        var consumed = Set<String>()
+
+        // Known keys first, in a sensible order.
+        for (key, label) in knownLabels {
+            if let w = window(limits[key], label: label) {
+                windows.append(w)
+                consumed.insert(key)
+            }
+        }
+        // Any other window-shaped entries we don't have a label for.
+        for (key, value) in limits where !consumed.contains(key) {
+            if let w = window(value, label: prettyKey(key)) { windows.append(w) }
+        }
+
         if windows.isEmpty {
             return .failed("Claude", "No usage windows", retryable: true, plan: plan)
         }
-        return ProviderUsage(name: "Claude", windows: windows, error: nil, plan: plan)
+        return .ok("Claude", pools: [UsagePool(title: nil, windows: windows)], plan: plan)
     }
 
+    /// A window entry is a dict carrying a numeric `utilization` and `resets_at`;
+    /// this skips non-window keys like `extra_usage`, `limits`, and `spend`.
     private static func window(_ raw: Any?, label: String) -> UsageWindow? {
         guard let dict = raw as? [String: Any],
-              let util = (dict["utilization"] as? NSNumber)?.doubleValue else { return nil }
+              let util = (dict["utilization"] as? NSNumber)?.doubleValue,
+              dict["resets_at"] is String else { return nil }
         return UsageWindow(label: label, usedPercent: util,
                            resetAt: isoDate(dict["resets_at"] as? String))
+    }
+
+    private static func prettyKey(_ key: String) -> String {
+        key.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     private static func isoDate(_ s: String?) -> Date? {

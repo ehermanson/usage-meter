@@ -8,15 +8,18 @@ if CommandLine.arguments.contains("--selftest") {
         let claude = await ClaudeClient.fetch()
         let codex = await CodexClient.fetch()
         for p in [claude, codex] {
-            print("\(p.name):")
-            if let err = p.error {
-                print("  error: \(err)")
-            } else {
-                for w in p.windows {
+            let planSuffix = p.plan.map { " [\($0)]" } ?? ""
+            print("\(p.name)\(planSuffix):")
+            for pool in p.pools {
+                if let title = pool.title { print("  \(title)") }
+                for w in pool.windows {
                     let reset = Format.relativeReset(w.resetAt)
-                    print(String(format: "  %-8@ %5.1f%%  %@",
+                    print(String(format: "  %-14@ %5.1f%%  %@",
                                  w.label as NSString, w.usedPercent, reset as NSString))
                 }
+            }
+            if let err = p.error {
+                print("  note: \(err)")
             }
         }
         sem.signal()
@@ -25,4 +28,22 @@ if CommandLine.arguments.contains("--selftest") {
     exit(0)
 }
 
+// `UsageBar --login on|off|status` manages the login item from the terminal.
+// Bundle.main resolves to the enclosing .app when run from inside its bundle.
+if let i = CommandLine.arguments.firstIndex(of: "--login") {
+    let action = CommandLine.arguments[safe: i + 1] ?? "status"
+    switch action {
+    case "on":  print(LoginItem.setEnabled(true) ? "login item: enabled" : "failed to enable")
+    case "off": print(LoginItem.setEnabled(false) ? "login item: disabled" : "failed to disable")
+    default:    print("login item: \(LoginItem.isEnabled ? "enabled" : "not enabled")")
+    }
+    exit(0)
+}
+
 UsageBarApp.main()
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}

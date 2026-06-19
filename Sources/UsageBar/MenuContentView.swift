@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuContentView: View {
     @ObservedObject var store: UsageStore
+    @State private var launchAtLogin = LoginItem.isEnabled
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -20,11 +21,24 @@ struct MenuContentView: View {
             }
 
             Divider()
+
+            Toggle("Launch at Login", isOn: $launchAtLogin)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
+                .onChange(of: launchAtLogin) { newValue in
+                    if !LoginItem.setEnabled(newValue) {
+                        launchAtLogin = LoginItem.isEnabled // revert on failure
+                    }
+                }
+
             footer
         }
         .padding(14)
         .frame(width: 280)
-        .onAppear { Task { await store.refresh() } }
+        .onAppear {
+            launchAtLogin = LoginItem.isEnabled
+            Task { await store.refresh() }
+        }
     }
 
     private var header: some View {
@@ -84,8 +98,16 @@ private struct ProviderRow: View {
                 }
             }
 
-            ForEach(provider.windows) { window in
-                WindowBar(window: window)
+            ForEach(provider.pools) { pool in
+                if let title = pool.title {
+                    Text(title)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 2)
+                }
+                ForEach(pool.windows) { window in
+                    WindowBar(window: window)
+                }
             }
 
             // A note shown alongside windows means we're displaying a stale
@@ -93,7 +115,7 @@ private struct ProviderRow: View {
             if let note = provider.error {
                 Text(note)
                     .font(.system(size: 10))
-                    .foregroundStyle(provider.windows.isEmpty ? .red : .orange)
+                    .foregroundStyle(provider.allWindows.isEmpty ? .red : .orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

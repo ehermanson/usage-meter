@@ -30,18 +30,63 @@ enum CodexClient {
     // MARK: - Parsing
 
     private static func parse(_ root: [String: Any]) -> ProviderUsage {
-        // Shape: { rateLimits: { primary: {...}, secondary: {...} }, ... }
-        guard let rl = root["rateLimits"] as? [String: Any]
-            ?? (root["rate_limits"] as? [String: Any]) else {
-            return .failed("Codex", "No rate-limit data")
+        // Prefer the per-limit map (one entry per pool); fall back to the single
+        // default object. Shape: { rateLimitsByLimitId: { id: {primary, secondary,
+        // limitName, planType} }, rateLimits: { ... } }
+        let byId = root["rateLimitsByLimitId"] as? [String: Any]
+            ?? root["rate_limits_by_limit_id"] as? [String: Any]
+        let defaultRl = root["rateLimits"] as? [String: Any]
+            ?? root["rate_limits"] as? [String: Any]
+
+        var sources: [(id: String, dict: [String: Any])] = []
+        if let byId, !byId.isEmpty {
+            sources = byId.compactMap { key, value in
+                (value as? [String: Any]).map { (key, $0) }
+            }
+            // Show the default "codex" pool first, then the rest alphabetically.
+            sources.sort { lhs, rhs in
+                if lhs.id == "codex" { return true }
+                if rhs.id == "codex" { return false }
+                return lhs.id < rhs.id
+            }
+        } else if let defaultRl {
+            sources = [("codex", defaultRl)]
         }
-        var windows: [UsageWindow] = []
-        if let w = window(from: rl["primary"], fallbackLabel: "5h") { windows.append(w) }
-        if let w = window(from: rl["secondary"], fallbackLabel: "Weekly") { windows.append(w) }
-        if windows.isEmpty {
-            return .failed("Codex", "No windows")
+
+        guard !sources.isEmpty else { return .failed("Codex", "No rate-limit data") }
+
+        let plan = prettyPlan(num: nil, str:
+            (defaultRl?["planType"] ?? sources.first?.dict["planType"]) as? String)
+
+        var pools: [UsagePool] = []
+        for src in sources {
+            var windows: [UsageWindow] = []
+            if let w = window(from: src.dict["primary"], fallbackLabel: "5h") { windows.append(w) }
+            if let w = window(from: src.dict["secondary"], fallbackLabel: "Weekly") { windows.append(w) }
+            if windows.isEmpty { continue }
+            let title = poolTitle(limitName: src.dict["limitName"] as? String, limitId: src.id)
+            pools.append(UsagePool(title: title, windows: windows))
         }
-        return ProviderUsage(name: "Codex", windows: windows, error: nil)
+
+        if pools.isEmpty { return .failed("Codex", "No windows", plan: plan) }
+        return .ok("Codex", pools: pools, plan: plan)
+    }
+
+    /// The default "codex" pool gets no subheader; named pools show their label.
+    private static func poolTitle(limitName: String?, limitId: String) -> String? {
+        if let name = limitName, !name.isEmpty { return name }
+        return limitId == "codex" ? nil : limitId
+    }
+
+    private static func prettyPlan(num: Double?, str: String?) -> String? {
+        guard let raw = str, !raw.isEmpty else { return nil }
+        switch raw.lowercased() {
+        case "prolite", "pro_lite": return "Pro Lite"
+        case "pro": return "Pro"
+        case "plus": return "Plus"
+        case "team": return "Team"
+        default: return raw.capitalized
+        }
     }
 
     private static func window(from raw: Any?, fallbackLabel: String) -> UsageWindow? {
