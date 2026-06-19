@@ -130,10 +130,10 @@ enum ClaudeClient {
         if let baked = Bundle.main.object(forInfoDictionaryKey: "ClaudeHelperPath") as? String {
             candidates.append(baked)
         }
-        if let env = ProcessInfo.processInfo.environment["USAGE_BAR_HELPER"] {
+        if let env = ProcessInfo.processInfo.environment["USAGE_METER_HELPER"] {
             candidates.append(env)
         }
-        candidates.append("\(NSHomeDirectory())/projects/usage-bar/helpers/claude-usage.mjs")
+        candidates.append("\(NSHomeDirectory())/projects/usage-meter/helpers/claude-usage.mjs")
         for c in candidates where FileManager.default.fileExists(atPath: c) {
             return URL(fileURLWithPath: c)
         }

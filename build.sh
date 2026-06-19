@@ -1,10 +1,10 @@
 #!/bin/bash
-# Builds UsageBar.app -- a menu-bar app showing Claude & Codex usage limits.
+# Builds UsageMeter.app -- a menu-bar app showing Claude & Codex usage limits.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP_NAME="UsageBar"
-BUNDLE_ID="com.erichermanson.usagebar"
+APP_NAME="UsageMeter"
+BUNDLE_ID="com.erichermanson.usagemeter"
 CONFIG="release"
 
 echo "==> Compiling (${CONFIG})..."
@@ -27,7 +27,7 @@ cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>            <string>${APP_NAME}</string>
-    <key>CFBundleDisplayName</key>     <string>Usage Bar</string>
+    <key>CFBundleDisplayName</key>     <string>Usage Meter</string>
     <key>CFBundleIdentifier</key>      <string>${BUNDLE_ID}</string>
     <key>CFBundleExecutable</key>      <string>${APP_NAME}</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>

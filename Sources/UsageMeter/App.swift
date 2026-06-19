@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct UsageBarApp: App {
+struct UsageMeterApp: App {
     @State private var store = UsageStore.shared
 
     init() {

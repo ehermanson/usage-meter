@@ -1,4 +1,4 @@
-# Usage Bar
+# Usage Meter
 
 A tiny macOS menu-bar app that shows how much of your **Claude** and **Codex**
 usage windows you've burned, at a glance.
@@ -46,9 +46,9 @@ The manual refresh button (↻) forces an immediate Claude probe.
 
 ```sh
 cd helpers && npm install && cd ..   # one-time: installs the Claude Agent SDK
-./build.sh                           # compiles + assembles build/UsageBar.app
-open build/UsageBar.app              # launch
-cp -R build/UsageBar.app /Applications/   # optional: install
+./build.sh                           # compiles + assembles build/UsageMeter.app
+open build/UsageMeter.app              # launch
+cp -R build/UsageMeter.app /Applications/   # optional: install
 ```
 
 Requires the Swift toolchain (Xcode CLT), Node.js, and macOS 14+.
@@ -56,19 +56,19 @@ Requires the Swift toolchain (Xcode CLT), Node.js, and macOS 14+.
 `build.sh` bakes the absolute path of `helpers/claude-usage.mjs` into the app's
 Info.plist (`ClaudeHelperPath`), so the app keeps working after you move the
 `.app` — as long as the `helpers/` directory (with its `node_modules`) stays
-put. Override with the `USAGE_BAR_HELPER` env var if you relocate it.
+put. Override with the `USAGE_METER_HELPER` env var if you relocate it.
 
 ### Debug the data path without the UI
 
 ```sh
-.build/release/UsageBar --selftest
+.build/release/UsageMeter --selftest
 ```
 
 Prints both providers' windows to the terminal.
 
 ## Launch at login
 
-System Settings → General → Login Items → **+** → add `UsageBar.app`.
+System Settings → General → Login Items → **+** → add `UsageMeter.app`.
 
 ## Notes / caveats
 

@@ -1,24 +1,24 @@
 {
-    "configurations": [
-        {
-            "type": "swift",
-            "request": "launch",
-            "args": [],
-            "cwd": "${workspaceFolder:usage-bar}",
-            "name": "Debug UsageBar",
-            "target": "UsageBar",
-            "configuration": "debug",
-            "preLaunchTask": "swift: Build Debug UsageBar"
-        },
-        {
-            "type": "swift",
-            "request": "launch",
-            "args": [],
-            "cwd": "${workspaceFolder:usage-bar}",
-            "name": "Release UsageBar",
-            "target": "UsageBar",
-            "configuration": "release",
-            "preLaunchTask": "swift: Build Release UsageBar"
-        }
-    ]
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:usage-meter}",
+      "name": "Debug UsageMeter",
+      "target": "UsageMeter",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug UsageMeter"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:usage-meter}",
+      "name": "Release UsageMeter",
+      "target": "UsageMeter",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release UsageMeter"
+    }
+  ]
 }

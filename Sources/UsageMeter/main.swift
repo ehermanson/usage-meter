@@ -1,6 +1,6 @@
 import Foundation
 
-// `UsageBar --selftest` fetches both providers from the terminal and prints the
+// `UsageMeter --selftest` fetches both providers from the terminal and prints the
 // result, so the data path can be validated without the menu-bar UI.
 if CommandLine.arguments.contains("--selftest") {
     let sem = DispatchSemaphore(value: 0)
@@ -35,7 +35,7 @@ if CommandLine.arguments.contains("--selftest") {
     exit(0)
 }
 
-// `UsageBar --login on|off|status` manages the login item from the terminal.
+// `UsageMeter --login on|off|status` manages the login item from the terminal.
 // Bundle.main resolves to the enclosing .app when run from inside its bundle.
 if let i = CommandLine.arguments.firstIndex(of: "--login") {
     let action = CommandLine.arguments[safe: i + 1] ?? "status"
@@ -47,7 +47,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--login") {
     exit(0)
 }
 
-UsageBarApp.main()
+UsageMeterApp.main()
 
 private extension Array {
     subscript(safe index: Int) -> Element? {

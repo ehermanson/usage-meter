@@ -19,7 +19,7 @@ enum LoginItem {
             }
             return true
         } catch {
-            NSLog("[UsageBar] Login-item toggle failed: \(error.localizedDescription)")
+            NSLog("[UsageMeter] Login-item toggle failed: \(error.localizedDescription)")
             return false
         }
     }

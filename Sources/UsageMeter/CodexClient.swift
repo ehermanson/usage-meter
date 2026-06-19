@@ -187,7 +187,7 @@ private final class CodexRPCSession {
 
         // 1. initialize
         send(["jsonrpc": "2.0", "id": 1, "method": "initialize",
-              "params": ["clientInfo": ["name": "usage-bar", "version": "1.0.0"],
+              "params": ["clientInfo": ["name": "usage-meter", "version": "1.0.0"],
                          "capabilities": ["experimentalApi": true]]])
 
         // Watchdog timeout.
