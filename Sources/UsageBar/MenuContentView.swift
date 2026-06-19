@@ -22,6 +22,25 @@ struct MenuContentView: View {
 
             Divider()
 
+            Menu {
+                Button { store.setPinned(nil) } label: {
+                    pickerRow("Auto (peak)", checked: store.pinnedKey == nil)
+                }
+                if !store.selectableWindows.isEmpty { Divider() }
+                ForEach(store.selectableWindows) { item in
+                    Button { store.setPinned(item.key) } label: {
+                        pickerRow(item.display, checked: store.pinnedKey == item.key)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "pin")
+                    Text("Menu bar: \(store.pinnedDisplayLabel)")
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .font(.system(size: 11))
+
             Toggle("Launch at Login", isOn: $launchAtLogin)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
@@ -69,6 +88,15 @@ struct MenuContentView: View {
             Button("Quit") { NSApplication.shared.terminate(nil) }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func pickerRow(_ text: String, checked: Bool) -> some View {
+        if checked {
+            Label(text, systemImage: "checkmark")
+        } else {
+            Text(text)
         }
     }
 
@@ -155,9 +183,9 @@ private struct WindowBar: View {
 
     private var barColor: Color {
         switch window.usedPercent {
-        case ..<60: return .green
-        case ..<85: return .orange
-        default: return .red
+        case ..<60: return .green   // healthy
+        case ..<90: return .yellow  // getting close
+        default: return .red        // nearly exhausted
         }
     }
 }

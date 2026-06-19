@@ -8,6 +8,11 @@ final class UsageStore: ObservableObject {
     @Published var isLoading = false
     @Published var lastUpdated: Date?
 
+    /// Which window is pinned to the menu-bar title; nil = Auto (highest 5h).
+    @Published var pinnedKey: String? = UserDefaults.standard.string(forKey: "pinnedWindowKey") {
+        didSet { UserDefaults.standard.set(pinnedKey, forKey: "pinnedWindowKey") }
+    }
+
     /// Claude's usage endpoint is itself rate-limited, so probe it sparingly.
     private let claudeMinInterval: TimeInterval = 300
     private var claudeLastAttempt: Date?
@@ -18,9 +23,72 @@ final class UsageStore: ObservableObject {
 
     private var timer: Timer?
 
-    /// Highest 5h utilization across providers — drives the menu-bar title.
-    var peakFiveHour: Double {
-        providers.compactMap { $0.fiveHour?.usedPercent }.max() ?? 0
+    // MARK: - Menu-bar selection
+
+    struct SelectableWindow: Identifiable {
+        let key: String
+        let display: String      // "Claude · Weekly · Sonnet"
+        let provider: String
+        let percent: Double
+        var id: String { key }
+    }
+
+    static func windowKey(provider: String, poolTitle: String?, windowLabel: String) -> String {
+        "\(provider)\u{1}\(poolTitle ?? "")\u{1}\(windowLabel)"
+    }
+
+    /// Every window the user can pin to the menu bar.
+    var selectableWindows: [SelectableWindow] {
+        var out: [SelectableWindow] = []
+        for p in providers {
+            for pool in p.pools {
+                for w in pool.windows {
+                    let display = [p.name, pool.title, w.label]
+                        .compactMap { $0 }.joined(separator: " · ")
+                    out.append(.init(
+                        key: Self.windowKey(provider: p.name, poolTitle: pool.title, windowLabel: w.label),
+                        display: display, provider: p.name, percent: w.usedPercent))
+                }
+            }
+        }
+        return out
+    }
+
+    func setPinned(_ key: String?) { pinnedKey = key }
+
+    var pinnedDisplayLabel: String {
+        if let key = pinnedKey, let sel = selectableWindows.first(where: { $0.key == key }) {
+            return sel.display
+        }
+        return "Auto (peak)"
+    }
+
+    /// (tag, percent) for the menu-bar title; honors the pin, else highest 5h.
+    var menuBar: (tag: String, percent: Double)? {
+        if let key = pinnedKey, let sel = selectableWindows.first(where: { $0.key == key }) {
+            return (Self.shortCode(sel.provider), sel.percent)
+        }
+        var best: (String, Double)?
+        for p in providers {
+            guard let f = p.fiveHour else { continue }
+            if best == nil || f.usedPercent > best!.1 {
+                best = (Self.shortCode(p.name), f.usedPercent)
+            }
+        }
+        return best
+    }
+
+    var menuBarTitle: String {
+        guard let mb = menuBar else { return "—" }
+        return "\(mb.tag) \(Format.percent(mb.percent))"
+    }
+
+    static func shortCode(_ name: String) -> String {
+        switch name {
+        case "Claude": return "Cl"
+        case "Codex": return "Cx"
+        default: return String(name.prefix(2))
+        }
     }
 
     func startAutoRefresh(interval: TimeInterval = 60) {
