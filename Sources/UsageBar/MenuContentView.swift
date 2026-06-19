@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MenuContentView: View {
-    @ObservedObject var store: UsageStore
+    @Bindable var store: UsageStore
     @State private var launchAtLogin = LoginItem.isEnabled
 
     var body: some View {
@@ -22,24 +22,7 @@ struct MenuContentView: View {
 
             Divider()
 
-            Menu {
-                Button { store.setPinned(nil) } label: {
-                    pickerRow("Auto (peak)", checked: store.pinnedProvider == nil)
-                }
-                if !store.selectableProviders.isEmpty { Divider() }
-                ForEach(store.selectableProviders, id: \.self) { name in
-                    Button { store.setPinned(name) } label: {
-                        pickerRow(name, checked: store.pinnedProvider == name)
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "pin")
-                    Text("Menu bar: \(store.pinnedDisplayLabel)")
-                }
-            }
-            .menuStyle(.borderlessButton)
-            .font(.system(size: 11))
+            menuBarPicker
 
             Toggle("Compact (5hr only)", isOn: $store.compactMenuBar)
                 .toggleStyle(.checkbox)
@@ -48,10 +31,8 @@ struct MenuContentView: View {
             Toggle("Launch at Login", isOn: $launchAtLogin)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
-                .onChange(of: launchAtLogin) { newValue in
-                    if !LoginItem.setEnabled(newValue) {
-                        launchAtLogin = LoginItem.isEnabled // revert on failure
-                    }
+                .onChange(of: launchAtLogin) { _, newValue in
+                    applyLaunchAtLogin(newValue)
                 }
 
             footer
@@ -75,27 +56,53 @@ struct MenuContentView: View {
         }
     }
 
+    private var menuBarPicker: some View {
+        Menu {
+            Button { store.setPinned(nil) } label: {
+                pickerRow("Auto (peak)", checked: store.pinnedProvider == nil)
+            }
+            if !store.selectableProviders.isEmpty { Divider() }
+            ForEach(store.selectableProviders, id: \.self) { name in
+                Button { store.setPinned(name) } label: {
+                    pickerRow(name, checked: store.pinnedProvider == name)
+                }
+            }
+        } label: {
+            Label("Menu bar: \(store.pinnedDisplayLabel)", systemImage: "pin")
+        }
+        .menuStyle(.borderlessButton)
+        .font(.system(size: 11))
+    }
+
     private var footer: some View {
         HStack(spacing: 6) {
-            Text(updatedText)
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+            updatedLabel
 
-            Button {
-                Task { await store.refresh(force: true) }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.borderless)
-            .disabled(store.isLoading)
-            .help("Refresh now")
+            Button("Refresh", systemImage: "arrow.clockwise", action: refreshNow)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .disabled(store.isLoading)
+                .help("Refresh now")
 
             Spacer()
 
-            Button("Quit") { NSApplication.shared.terminate(nil) }
+            Button("Quit", action: quit)
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    @ViewBuilder
+    private var updatedLabel: some View {
+        Group {
+            if let updated = store.lastUpdated {
+                Text("Updated \(updated, format: .dateTime.hour().minute().second())")
+            } else {
+                Text("—")
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.tertiary)
     }
 
     @ViewBuilder
@@ -107,92 +114,19 @@ struct MenuContentView: View {
         }
     }
 
-    private var updatedText: String {
-        guard let d = store.lastUpdated else { return "—" }
-        let f = DateFormatter()
-        f.dateFormat = "h:mm:ss a"
-        return "Updated \(f.string(from: d))"
-    }
-}
+    // MARK: - Actions
 
-private struct ProviderRow: View {
-    let provider: ProviderUsage
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text(provider.name)
-                    .font(.system(size: 12, weight: .semibold))
-                if let plan = provider.plan {
-                    Text(plan)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Color.secondary.opacity(0.15), in: Capsule())
-                }
-            }
-
-            ForEach(provider.pools) { pool in
-                if let title = pool.title {
-                    Text(title)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 2)
-                }
-                ForEach(pool.windows) { window in
-                    WindowBar(window: window)
-                }
-            }
-
-            // A note shown alongside windows means we're displaying a stale
-            // value; with no windows it's a hard error.
-            if let note = provider.error {
-                Text(note)
-                    .font(.system(size: 10))
-                    .foregroundStyle(provider.allWindows.isEmpty ? .red : .orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
-
-private struct WindowBar: View {
-    let window: UsageWindow
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(window.label)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(Format.percent(window.usedPercent))
-                    .font(.system(size: 11, weight: .medium))
-                    .monospacedDigit()
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.secondary.opacity(0.18))
-                    Capsule()
-                        .fill(barColor)
-                        .frame(width: max(3, geo.size.width * window.clampedFraction))
-                }
-            }
-            .frame(height: 6)
-            if let reset = window.resetAt {
-                Text(Format.relativeReset(reset))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            }
-        }
+    private func refreshNow() {
+        Task { await store.refresh(force: true) }
     }
 
-    private var barColor: Color {
-        switch window.usedPercent {
-        case ..<60: return .green   // healthy
-        case ..<90: return .yellow  // getting close
-        default: return .red        // nearly exhausted
+    private func quit() {
+        NSApplication.shared.terminate(nil)
+    }
+
+    private func applyLaunchAtLogin(_ enabled: Bool) {
+        if !LoginItem.setEnabled(enabled) {
+            launchAtLogin = LoginItem.isEnabled // revert on failure
         }
     }
 }

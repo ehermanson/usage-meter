@@ -1,20 +1,22 @@
+import Observation
 import SwiftUI
 
 @MainActor
-final class UsageStore: ObservableObject {
+@Observable
+final class UsageStore {
     static let shared = UsageStore()
 
-    @Published var providers: [ProviderUsage] = []
-    @Published var isLoading = false
-    @Published var lastUpdated: Date?
+    var providers: [ProviderUsage] = []
+    var isLoading = false
+    var lastUpdated: Date?
 
     /// Which provider is pinned to the menu-bar title; nil = Auto (highest 5h).
-    @Published var pinnedProvider: String? = UserDefaults.standard.string(forKey: "pinnedProvider") {
+    var pinnedProvider: String? = UserDefaults.standard.string(forKey: "pinnedProvider") {
         didSet { UserDefaults.standard.set(pinnedProvider, forKey: "pinnedProvider") }
     }
 
     /// Compact menu-bar title: show only the 5hr window, skip weekly.
-    @Published var compactMenuBar: Bool = UserDefaults.standard.bool(forKey: "compactMenuBar") {
+    var compactMenuBar: Bool = UserDefaults.standard.bool(forKey: "compactMenuBar") {
         didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
     }
 
@@ -50,8 +52,6 @@ final class UsageStore: ObservableObject {
             .max { ($0.fiveHour?.usedPercent ?? -1) < ($1.fiveHour?.usedPercent ?? -1) }
     }
 
-    /// Full: "Claude  5hr: 7% | Weekly 31%". Compact: "Claude  5hr: 7%".
-    /// With a single provider the name is dropped (e.g. "5hr: 7% | Weekly 31%").
     /// A gauge whose needle reflects the menu-bar provider's 5hr usage.
     /// Stays monochrome (uncolored) — only the dropdown bars use color.
     var menuBarIcon: String {
@@ -67,6 +67,8 @@ final class UsageStore: ObservableObject {
         }
     }
 
+    /// Full: "Claude  5hr: 7% | Weekly 31%". Compact: "Claude  5hr: 7%".
+    /// With a single provider the name is dropped (e.g. "5hr: 7% | Weekly 31%").
     var menuBarTitle: String {
         guard let p = menuBarProvider else { return "—" }
         var parts: [String] = []
@@ -96,11 +98,15 @@ final class UsageStore: ObservableObject {
         async let codexResult = CodexClient.fetch()
 
         // Claude is throttled to protect its rate-limited usage endpoint.
-        let claudeDue = force
-            || claudeLastAttempt == nil
-            || Date().timeIntervalSince(claudeLastAttempt!) >= claudeMinInterval
+        let claudeDue: Bool = if force || claudeLastAttempt == nil {
+            true
+        } else if let last = claudeLastAttempt {
+            Date.now.timeIntervalSince(last) >= claudeMinInterval
+        } else {
+            true
+        }
         async let claudeResult: ProviderUsage? = claudeDue ? ClaudeClient.fetch() : nil
-        if claudeDue { claudeLastAttempt = Date() }
+        if claudeDue { claudeLastAttempt = .now }
 
         let codex = resolve(await codexResult, lastGood: &lastGoodCodex)
         let claude: ProviderUsage
@@ -111,7 +117,7 @@ final class UsageStore: ObservableObject {
         }
 
         providers = [claude, codex]
-        lastUpdated = Date()
+        lastUpdated = .now
     }
 
     /// Prefer fresh windows; otherwise fall back to the last good snapshot and

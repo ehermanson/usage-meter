@@ -99,7 +99,7 @@ enum ClaudeClient {
     }
 
     private static func prettyKey(_ key: String) -> String {
-        key.replacingOccurrences(of: "_", with: " ").capitalized
+        key.replacing("_", with: " ").capitalized
     }
 
     private static func isoDate(_ s: String?) -> Date? {

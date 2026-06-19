@@ -51,7 +51,7 @@ open build/UsageBar.app              # launch
 cp -R build/UsageBar.app /Applications/   # optional: install
 ```
 
-Requires the Swift toolchain (Xcode CLT), Node.js, and macOS 13+.
+Requires the Swift toolchain (Xcode CLT), Node.js, and macOS 14+.
 
 `build.sh` bakes the absolute path of `helpers/claude-usage.mjs` into the app's
 Info.plist (`ClaudeHelperPath`), so the app keeps working after you move the

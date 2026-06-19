@@ -74,6 +74,6 @@ enum Format {
     }
 
     static func percent(_ value: Double) -> String {
-        String(format: "%.0f%%", value)
+        "\(value.formatted(.number.precision(.fractionLength(0))))%"
     }
 }
