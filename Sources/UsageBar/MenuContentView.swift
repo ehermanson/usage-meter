@@ -41,6 +41,10 @@ struct MenuContentView: View {
             .menuStyle(.borderlessButton)
             .font(.system(size: 11))
 
+            Toggle("Compact (5hr only)", isOn: $store.compactMenuBar)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
+
             Toggle("Launch at Login", isOn: $launchAtLogin)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))

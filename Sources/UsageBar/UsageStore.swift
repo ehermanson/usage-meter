@@ -13,6 +13,11 @@ final class UsageStore: ObservableObject {
         didSet { UserDefaults.standard.set(pinnedProvider, forKey: "pinnedProvider") }
     }
 
+    /// Compact menu-bar title: show only the 5hr window, skip weekly.
+    @Published var compactMenuBar: Bool = UserDefaults.standard.bool(forKey: "compactMenuBar") {
+        didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
+    }
+
     /// Claude's usage endpoint is itself rate-limited, so probe it sparingly.
     private let claudeMinInterval: TimeInterval = 300
     private var claudeLastAttempt: Date?
@@ -45,12 +50,12 @@ final class UsageStore: ObservableObject {
             .max { ($0.fiveHour?.usedPercent ?? -1) < ($1.fiveHour?.usedPercent ?? -1) }
     }
 
-    /// e.g. "Claude  5hr: 7% | Weekly 31%"
+    /// Full: "Claude  5hr: 7% | Weekly 31%". Compact: "Claude  5hr: 7%".
     var menuBarTitle: String {
         guard let p = menuBarProvider else { return "—" }
         var parts: [String] = []
         if let f = p.fiveHour { parts.append("5hr: \(Format.percent(f.usedPercent))") }
-        if let w = p.weekly { parts.append("Weekly \(Format.percent(w.usedPercent))") }
+        if !compactMenuBar, let w = p.weekly { parts.append("Weekly \(Format.percent(w.usedPercent))") }
         let body = parts.joined(separator: " | ")
         return body.isEmpty ? p.name : "\(p.name)  \(body)"
     }
