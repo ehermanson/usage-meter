@@ -10,7 +10,8 @@ let package = Package(
             path: "Sources/UsageMeter",
             resources: [
                 .copy("Resources/claude-logo.png"),
-                .copy("Resources/codex-logo.png")
+                .copy("Resources/codex-logo.png"),
+                .copy("Resources/gemini-logo.png")
             ]
         ),
         .testTarget(

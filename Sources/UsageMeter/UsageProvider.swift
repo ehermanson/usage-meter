@@ -64,3 +64,14 @@ struct CodexProvider: UsageProvider {
     let logoResource: String? = "codex-logo"
     func fetch() async -> ProviderUsage { await CodexClient.fetch() }
 }
+
+/// Gemini — fetched from the Code Assist backend using the Antigravity CLI's
+/// stored OAuth credentials. Hits Google over HTTPS (and may refresh a token),
+/// so probe at a calm cadence with a back-off on failures.
+struct GeminiProvider: UsageProvider {
+    let name = "Gemini"
+    let accent = Color.blue
+    let logoResource: String? = "gemini-logo"
+    let throttle = ThrottlePolicy(successInterval: 180, backoffBase: 120, backoffMax: 600)
+    func fetch() async -> ProviderUsage { await GeminiClient.fetch() }
+}

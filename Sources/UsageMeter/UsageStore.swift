@@ -23,7 +23,7 @@ final class UsageStore {
     /// The providers polled each pass, in display order. Add one here to surface a
     /// new source — the fetch loop, throttling, last-good caching, and section
     /// styling are all keyed off this list, so nothing else needs to change.
-    private let registry: [UsageProvider] = [ClaudeProvider(), CodexProvider()]
+    private let registry: [UsageProvider] = [ClaudeProvider(), CodexProvider(), GeminiProvider()]
 
     /// Per-provider bookkeeping, keyed by name so it scales with the registry
     /// instead of a field apiece. `failureStreak` drives the throttle back-off;
@@ -141,17 +141,30 @@ final class UsageStore {
         }
     }
 
-    /// Full: "Claude  5h 7% · Wk 31%". Compact: "Claude  5h 7%".
+    /// Full: "Claude  5h 7% · Wk 31%". Compact: "Claude  5h 7%". A provider with
+    /// no 5h/weekly split shows its own window label (e.g. "Gemini  Daily 12%").
     /// With a single provider the name is dropped (e.g. "5h 7% · Wk 31%").
     var menuBarTitle: String {
         guard let p = menuBarProvider else { return "—" }
         var parts: [String] = []
-        if let f = p.fiveHour { parts.append("5h \(Format.percent(f.usedPercent))") }
-        if !compactMenuBar, let w = p.weekly { parts.append("Wk \(Format.percent(w.usedPercent))") }
+        if let f = p.fiveHour {
+            parts.append("\(Self.shortLabel(f.label)) \(Format.percent(f.usedPercent))")
+        }
+        if !compactMenuBar, let w = p.weekly, w.id != p.fiveHour?.id {
+            parts.append("\(Self.shortLabel(w.label)) \(Format.percent(w.usedPercent))")
+        }
         let body = parts.joined(separator: " · ")
         if body.isEmpty { return p.name }
         // Only label the provider when more than one is available.
         return selectableProviders.count > 1 ? "\(p.name)  \(body)" : body
+    }
+
+    /// Compact window labels for the menu bar: the verbose pool labels collapse to
+    /// "5h"/"Wk"; anything else (e.g. "Daily") is shown as-is.
+    private static func shortLabel(_ label: String) -> String {
+        if label.localizedCaseInsensitiveContains("5h") { return "5h" }
+        if label.localizedCaseInsensitiveContains("week") || label.contains("7d") { return "Wk" }
+        return label
     }
 
     func startAutoRefresh(interval: TimeInterval = 60) {
@@ -221,21 +234,25 @@ final class UsageStore {
         persistLastGood()
     }
 
-    /// Prefer fresh windows; otherwise fall back to the last good snapshot and
-    /// annotate it as stale rather than blanking the row.
+    /// Prefer fresh windows. For a *retryable* failure (e.g. a throttled endpoint)
+    /// keep showing the last good snapshot rather than blanking the row. A
+    /// *non-retryable* failure (signed out, account/config mismatch) means the old
+    /// values are no longer trustworthy, so drop them and surface the error.
     private func resolve(_ fresh: ProviderUsage, name: String) -> ProviderUsage {
         if !fresh.allWindows.isEmpty {
             states[name, default: .init()].lastGood = fresh
             return fresh
         }
-        guard let prev = states[name]?.lastGood else { return fresh }  // no history → surface error
-        let note = fresh.retryable ? "throttled — showing last value" : (fresh.error ?? "stale")
+        guard fresh.retryable, let prev = states[name]?.lastGood else {
+            states[name]?.lastGood = nil  // no stale data for hard failures
+            return fresh
+        }
         return ProviderUsage(
             name: prev.name,
             pools: prev.pools,
-            error: note,
+            error: "throttled — showing last value",
             plan: prev.plan ?? fresh.plan,
-            retryable: fresh.retryable
+            retryable: true
         )
     }
 }

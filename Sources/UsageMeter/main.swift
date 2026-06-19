@@ -7,7 +7,9 @@ if CommandLine.arguments.contains("--selftest") {
     Task {
         let claude = await ClaudeClient.fetch()
         let codex = await CodexClient.fetch()
-        for p in [claude, codex] {
+        let gemini = await GeminiClient.fetch()
+        let all = [claude, codex, gemini]
+        for p in all {
             let planSuffix = p.plan.map { " [\($0)]" } ?? ""
             print("\(p.name)\(planSuffix):")
             for pool in p.pools {
@@ -25,10 +27,8 @@ if CommandLine.arguments.contains("--selftest") {
             }
         }
         print("--- menu bar title (per provider) ---")
-        for p in [claude, codex] where p.hasWindows {
-            var parts: [String] = []
-            if let f = p.fiveHour { parts.append("5hr: \(Format.percent(f.usedPercent))") }
-            if let w = p.weekly { parts.append("Weekly \(Format.percent(w.usedPercent))") }
+        for p in all where p.hasWindows {
+            let parts = p.allWindows.map { "\($0.label) \(Format.percent($0.usedPercent))" }
             print("  \(p.name)  \(parts.joined(separator: " | "))")
         }
         sem.signal()
