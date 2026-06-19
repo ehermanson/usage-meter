@@ -20,49 +20,41 @@ final class UsageStore {
         didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
     }
 
-    /// Claude's usage endpoint is itself rate-limited and answers "throttled"
-    /// when probed too often — so retrying hard only keeps it throttled. After a
-    /// success we settle to `claudeSuccessInterval`; after a failure we back off
-    /// exponentially from `claudeBackoffBase` up to `claudeBackoffMax` to give the
-    /// endpoint room to recover instead of hammering it.
-    private let claudeSuccessInterval: TimeInterval = 300
-    private let claudeBackoffBase: TimeInterval = 180
-    private let claudeBackoffMax: TimeInterval = 900
-    private var claudeLastAttempt: Date?
-    private var claudeFailureStreak = 0
+    /// The providers polled each pass, in display order. Add one here to surface a
+    /// new source — the fetch loop, throttling, last-good caching, and section
+    /// styling are all keyed off this list, so nothing else needs to change.
+    private let registry: [UsageProvider] = [ClaudeProvider(), CodexProvider()]
 
-    /// Last successful snapshots, shown when a refresh fails/throttles. Persisted
-    /// across launches so a cold start (with a throttled endpoint) shows the last
-    /// known values instead of a blank "no data" row.
-    private var lastGoodClaude: ProviderUsage? { didSet { persistLastGood() } }
-    private var lastGoodCodex: ProviderUsage? { didSet { persistLastGood() } }
+    /// Per-provider bookkeeping, keyed by name so it scales with the registry
+    /// instead of a field apiece. `failureStreak` drives the throttle back-off;
+    /// `lastGood` is the last snapshot with windows, shown when a fetch fails.
+    private struct ProviderState {
+        var lastAttempt: Date?
+        var failureStreak = 0
+        var lastGood: ProviderUsage?
+    }
+    private var states: [String: ProviderState] = [:]
 
     private enum PersistKey {
-        static let claude = "lastGoodClaude.v1"
-        static let codex = "lastGoodCodex.v1"
+        static func lastGood(_ name: String) -> String { "lastGood.\(name).v1" }
         static let updated = "lastGoodUpdated.v1"
     }
 
-    /// Set while seeding from disk so the `didSet` hooks don't re-persist (and
-    /// clobber the saved timestamp) during load.
-    private var isLoadingPersisted = false
-
     private init() { loadLastGood() }
 
-    /// Seed `lastGood*` and the visible rows from disk so the menu has data the
+    /// Seed `lastGood` and the visible rows from disk so the menu has data the
     /// instant it opens, before the first (possibly throttled) probe returns.
     private func loadLastGood() {
-        isLoadingPersisted = true
-        defer { isLoadingPersisted = false }
         let defaults = UserDefaults.standard
         let decoder = JSONDecoder()
-        if let data = defaults.data(forKey: PersistKey.claude) {
-            lastGoodClaude = try? decoder.decode(ProviderUsage.self, from: data)
+        var seeded: [ProviderUsage] = []
+        for provider in registry {
+            guard let data = defaults.data(forKey: PersistKey.lastGood(provider.name)),
+                let usage = try? decoder.decode(ProviderUsage.self, from: data)
+            else { continue }
+            states[provider.name, default: .init()].lastGood = usage
+            seeded.append(usage)
         }
-        if let data = defaults.data(forKey: PersistKey.codex) {
-            lastGoodCodex = try? decoder.decode(ProviderUsage.self, from: data)
-        }
-        let seeded = [lastGoodClaude, lastGoodCodex].compactMap { $0 }
         if !seeded.isEmpty {
             providers = seeded
             lastUpdated = defaults.object(forKey: PersistKey.updated) as? Date
@@ -70,16 +62,24 @@ final class UsageStore {
     }
 
     private func persistLastGood() {
-        guard !isLoadingPersisted else { return }
         let defaults = UserDefaults.standard
         let encoder = JSONEncoder()
-        if let claude = lastGoodClaude, let data = try? encoder.encode(claude) {
-            defaults.set(data, forKey: PersistKey.claude)
-        }
-        if let codex = lastGoodCodex, let data = try? encoder.encode(codex) {
-            defaults.set(data, forKey: PersistKey.codex)
+        for provider in registry {
+            guard let usage = states[provider.name]?.lastGood,
+                let data = try? encoder.encode(usage)
+            else { continue }
+            defaults.set(data, forKey: PersistKey.lastGood(provider.name))
         }
         defaults.set(Date.now, forKey: PersistKey.updated)
+    }
+
+    /// Display attributes for a provider's section, looked up by name so views
+    /// don't hardcode per-provider styling.
+    func style(for name: String) -> (accent: Color, logoResource: String?) {
+        guard let provider = registry.first(where: { $0.name == name }) else {
+            return (.accentColor, nil)
+        }
+        return (provider.accent, provider.logoResource)
     }
 
     private var timer: Timer?
@@ -182,48 +182,53 @@ final class UsageStore {
         isLoading = true
         defer { isLoading = false }
 
-        // Codex is cheap/local — always refresh it.
-        async let codexResult = CodexClient.fetch()
-
-        // Probe Claude only when due. After a success that's a calm 5-min cadence;
-        // after consecutive failures it's an exponential back-off so we stop
-        // hammering an endpoint that's telling us it's throttled.
-        let claudeInterval: TimeInterval =
-            claudeFailureStreak == 0
-            ? claudeSuccessInterval
-            : min(claudeBackoffBase * pow(2, Double(claudeFailureStreak - 1)), claudeBackoffMax)
-        let claudeDue: Bool =
-            if force {
-                true
-            } else if let last = claudeLastAttempt {
-                Date.now.timeIntervalSince(last) >= claudeInterval
+        // Kick off every due provider's fetch concurrently. A provider is due when
+        // forced, never attempted, or its throttle interval has elapsed since the
+        // last attempt (the interval widens with each consecutive failure).
+        var tasks: [String: Task<ProviderUsage, Never>] = [:]
+        for provider in registry {
+            let state = states[provider.name] ?? .init()
+            let due: Bool
+            if force || state.lastAttempt == nil {
+                due = true
             } else {
-                true  // never attempted yet
+                let interval = provider.throttle.interval(failureStreak: state.failureStreak)
+                due = Date.now.timeIntervalSince(state.lastAttempt!) >= interval
             }
-        async let claudeResult: ProviderUsage? = claudeDue ? ClaudeClient.fetch() : nil
-        if claudeDue { claudeLastAttempt = .now }
-
-        let codex = resolve(await codexResult, lastGood: &lastGoodCodex)
-        let claude: ProviderUsage
-        if let fresh = await claudeResult {
-            claude = resolve(fresh, lastGood: &lastGoodClaude)
-            claudeFailureStreak = fresh.allWindows.isEmpty ? claudeFailureStreak + 1 : 0
-        } else {
-            claude = lastGoodClaude ?? .failed("Claude", "Updating…", retryable: true)
+            if due {
+                states[provider.name, default: .init()].lastAttempt = .now
+                tasks[provider.name] = Task { await provider.fetch() }
+            }
         }
 
-        providers = [claude, codex]
+        // Resolve in registry order so the section order stays stable. Providers
+        // skipped this pass reuse their last good snapshot.
+        var resolved: [ProviderUsage] = []
+        for provider in registry {
+            let name = provider.name
+            guard let task = tasks[name] else {
+                resolved.append(states[name]?.lastGood ?? .failed(name, "Updating…", retryable: true))
+                continue
+            }
+            let fresh = await task.value
+            states[name, default: .init()].failureStreak =
+                fresh.allWindows.isEmpty ? (states[name]?.failureStreak ?? 0) + 1 : 0
+            resolved.append(resolve(fresh, name: name))
+        }
+
+        providers = resolved
         lastUpdated = .now
+        persistLastGood()
     }
 
     /// Prefer fresh windows; otherwise fall back to the last good snapshot and
     /// annotate it as stale rather than blanking the row.
-    private func resolve(_ fresh: ProviderUsage, lastGood: inout ProviderUsage?) -> ProviderUsage {
+    private func resolve(_ fresh: ProviderUsage, name: String) -> ProviderUsage {
         if !fresh.allWindows.isEmpty {
-            lastGood = fresh
+            states[name, default: .init()].lastGood = fresh
             return fresh
         }
-        guard let prev = lastGood else { return fresh }  // no history → surface the error
+        guard let prev = states[name]?.lastGood else { return fresh }  // no history → surface error
         let note = fresh.retryable ? "throttled — showing last value" : (fresh.error ?? "stale")
         return ProviderUsage(
             name: prev.name,

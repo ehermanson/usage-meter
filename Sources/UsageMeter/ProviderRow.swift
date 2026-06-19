@@ -3,15 +3,11 @@ import SwiftUI
 /// One provider's section: name + plan badge, its pools, and any stale note.
 struct ProviderRow: View {
     let provider: ProviderUsage
-
-    /// A subtle brand-ish accent so the two providers read as distinct sections.
-    private var accent: Color {
-        switch provider.name.lowercased() {
-        case "claude": return .orange
-        case "codex": return .teal
-        default: return .accentColor
-        }
-    }
+    /// A subtle brand-ish accent so providers read as distinct sections; used as
+    /// the dot fallback when the provider has no logo.
+    let accent: Color
+    /// Bundled logo resource name, supplied by the provider definition.
+    let logoResource: String?
 
     /// Source logos are pre-trimmed to their opaque bounds, so a single frame
     /// renders both marks at the same visual size.
@@ -20,7 +16,7 @@ struct ProviderRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                if let logo = ProviderRow.logo(for: provider.name) {
+                if let logo = logoImage {
                     Image(nsImage: logo)
                         .renderingMode(.template)
                         .resizable()
@@ -72,13 +68,12 @@ struct ProviderRow: View {
     }
 
     /// The provider's bundled brand logo, loaded once as a tintable template image.
-    private static func logo(for name: String) -> NSImage? {
-        let resource: String
-        switch name.lowercased() {
-        case "claude": resource = "claude-logo"
-        case "codex": resource = "codex-logo"
-        default: return nil
-        }
+    private var logoImage: NSImage? {
+        guard let logoResource else { return nil }
+        return ProviderRow.logo(named: logoResource)
+    }
+
+    private static func logo(named resource: String) -> NSImage? {
         if let cached = logoCache[resource] { return cached }
         guard let url = Bundle.module.url(forResource: resource, withExtension: "png"),
             let image = NSImage(contentsOf: url)

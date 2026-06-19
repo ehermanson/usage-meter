@@ -19,7 +19,11 @@ struct MenuContentView: View {
                     if provider.id != store.providers.first?.id {
                         Divider().opacity(0.5)
                     }
-                    ProviderRow(provider: provider)
+                    let style = store.style(for: provider.name)
+                    ProviderRow(
+                        provider: provider,
+                        accent: style.accent,
+                        logoResource: style.logoResource)
                 }
             }
 
