@@ -14,10 +14,18 @@ BIN_PATH="$(swift build -c "${CONFIG}" --show-bin-path)/${APP_NAME}"
 APP_DIR="build/${APP_NAME}.app"
 MACOS_DIR="${APP_DIR}/Contents/MacOS"
 
+RES_DIR="${APP_DIR}/Contents/Resources"
+BIN_DIR="$(dirname "${BIN_PATH}")"
+
 echo "==> Assembling ${APP_DIR} ..."
 rm -rf "${APP_DIR}"
-mkdir -p "${MACOS_DIR}"
+mkdir -p "${MACOS_DIR}" "${RES_DIR}"
 cp "${BIN_PATH}" "${MACOS_DIR}/${APP_NAME}"
+
+# Bundle the SwiftPM resource bundle (brand logos, etc.) so Bundle.module resolves.
+for bundle in "${BIN_DIR}"/*.bundle; do
+    [ -e "${bundle}" ] && cp -R "${bundle}" "${RES_DIR}/"
+done
 
 HELPER_PATH="$(pwd)/helpers/claude-usage.mjs"
 

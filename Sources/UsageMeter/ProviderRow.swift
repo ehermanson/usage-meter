@@ -13,13 +13,27 @@ struct ProviderRow: View {
         }
     }
 
+    /// Source logos are pre-trimmed to their opaque bounds, so a single frame
+    /// renders both marks at the same visual size.
+    private let logoSize: CGFloat = 14
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(accent)
-                    .frame(width: 7, height: 7)
-                    .accessibilityHidden(true)
+                if let logo = ProviderRow.logo(for: provider.name) {
+                    Image(nsImage: logo)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: logoSize, height: logoSize)
+                        .foregroundStyle(.primary)
+                        .accessibilityHidden(true)
+                } else {
+                    Circle()
+                        .fill(accent)
+                        .frame(width: 7, height: 7)
+                        .accessibilityHidden(true)
+                }
                 Text(provider.name)
                     .font(.system(size: 12, weight: .semibold))
                 if let plan = provider.plan {
@@ -56,4 +70,22 @@ struct ProviderRow: View {
             }
         }
     }
+
+    /// The provider's bundled brand logo, loaded once as a tintable template image.
+    private static func logo(for name: String) -> NSImage? {
+        let resource: String
+        switch name.lowercased() {
+        case "claude": resource = "claude-logo"
+        case "codex":  resource = "codex-logo"
+        default:       return nil
+        }
+        if let cached = logoCache[resource] { return cached }
+        guard let url = Bundle.module.url(forResource: resource, withExtension: "png"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        image.isTemplate = true
+        logoCache[resource] = image
+        return image
+    }
+
+    private static var logoCache: [String: NSImage] = [:]
 }

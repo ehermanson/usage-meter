@@ -7,7 +7,11 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "UsageMeter",
-            path: "Sources/UsageMeter"
+            path: "Sources/UsageMeter",
+            resources: [
+                .copy("Resources/claude-logo.png"),
+                .copy("Resources/codex-logo.png")
+            ]
         )
     ]
 )
