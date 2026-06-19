@@ -76,18 +76,21 @@ struct MenuContentView: View {
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 6) {
             Text(updatedText)
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
-            Spacer()
+
             Button {
                 Task { await store.refresh(force: true) }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(.borderless)
+            .disabled(store.isLoading)
             .help("Refresh now")
+
+            Spacer()
 
             Button("Quit") { NSApplication.shared.terminate(nil) }
                 .buttonStyle(.borderless)
