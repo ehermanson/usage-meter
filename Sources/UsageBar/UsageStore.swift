@@ -51,13 +51,16 @@ final class UsageStore: ObservableObject {
     }
 
     /// Full: "Claude  5hr: 7% | Weekly 31%". Compact: "Claude  5hr: 7%".
+    /// With a single provider the name is dropped (e.g. "5hr: 7% | Weekly 31%").
     var menuBarTitle: String {
         guard let p = menuBarProvider else { return "—" }
         var parts: [String] = []
         if let f = p.fiveHour { parts.append("5hr: \(Format.percent(f.usedPercent))") }
         if !compactMenuBar, let w = p.weekly { parts.append("Weekly \(Format.percent(w.usedPercent))") }
         let body = parts.joined(separator: " | ")
-        return body.isEmpty ? p.name : "\(p.name)  \(body)"
+        if body.isEmpty { return p.name }
+        // Only label the provider when more than one is available.
+        return selectableProviders.count > 1 ? "\(p.name)  \(body)" : body
     }
 
     func startAutoRefresh(interval: TimeInterval = 60) {
