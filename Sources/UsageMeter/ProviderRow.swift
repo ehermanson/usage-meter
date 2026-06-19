@@ -4,9 +4,21 @@ import SwiftUI
 struct ProviderRow: View {
     let provider: ProviderUsage
 
+    /// A subtle brand-ish accent so the two providers read as distinct sections.
+    private var accent: Color {
+        switch provider.name.lowercased() {
+        case "claude": return .orange
+        case "codex":  return .teal
+        default:       return .accentColor
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 7, height: 7)
                 Text(provider.name)
                     .font(.system(size: 12, weight: .semibold))
                 if let plan = provider.plan {
@@ -26,8 +38,10 @@ struct ProviderRow: View {
                         .foregroundStyle(.secondary)
                         .padding(.top, 2)
                 }
-                ForEach(pool.windows) { window in
-                    WindowBar(window: window)
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(pool.windows) { window in
+                        WindowBar(window: window)
+                    }
                 }
             }
 

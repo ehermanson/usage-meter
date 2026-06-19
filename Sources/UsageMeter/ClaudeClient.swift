@@ -102,14 +102,21 @@ enum ClaudeClient {
         key.replacing("_", with: " ").capitalized
     }
 
+    // Formatters are expensive to build, so reuse them across windows.
+    private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoPlain: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private static func isoDate(_ s: String?) -> Date? {
         guard let s else { return nil }
-        let frac = ISO8601DateFormatter()
-        frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = frac.date(from: s) { return d }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: s)
+        return isoFractional.date(from: s) ?? isoPlain.date(from: s)
     }
 
     private static func prettyPlan(_ raw: String?) -> String? {

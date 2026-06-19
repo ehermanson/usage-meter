@@ -15,7 +15,10 @@ struct MenuContentView: View {
                 }
                 .padding(.vertical, 8)
             } else {
-                ForEach(store.providers) { provider in
+                ForEach(Array(store.providers.enumerated()), id: \.element.id) { index, provider in
+                    if index > 0 {
+                        Divider().opacity(0.5)
+                    }
                     ProviderRow(provider: provider)
                 }
             }
@@ -41,7 +44,11 @@ struct MenuContentView: View {
         .frame(width: 280)
         .onAppear {
             launchAtLogin = LoginItem.isEnabled
-            Task { await store.refresh() }
+            // Opening the menu only refetches when the data has gone stale; a
+            // quick open right after a timer tick reuses what's already shown.
+            if store.isStale {
+                Task { await store.refresh() }
+            }
         }
     }
 

@@ -30,6 +30,21 @@ final class UsageStore {
 
     private var timer: Timer?
 
+    /// The in-flight refresh, so concurrent callers coalesce instead of being
+    /// dropped. `refreshToken` guards the teardown against interleaved tasks.
+    private var refreshTask: Task<Void, Never>?
+    private var refreshToken = 0
+
+    /// How old the data may be before opening the menu re-fetches. Keeps a quick
+    /// open right after a timer tick from spawning a redundant Codex subprocess.
+    private let staleAfter: TimeInterval = 20
+
+    /// True when the data is missing or old enough to justify a refetch.
+    var isStale: Bool {
+        guard let lastUpdated else { return true }
+        return Date.now.timeIntervalSince(lastUpdated) >= staleAfter
+    }
+
     // MARK: - Menu-bar selection
 
     /// Providers that currently have usage data and can be pinned.
@@ -89,8 +104,22 @@ final class UsageStore {
     }
 
     /// `force` ignores the Claude throttle (used by the manual refresh button).
+    /// Concurrent calls coalesce onto the in-flight refresh rather than being
+    /// dropped; a forced call awaits any running pass, then runs its own.
     func refresh(force: Bool = false) async {
-        if isLoading { return }
+        if let task = refreshTask {
+            await task.value
+            if !force { return } // non-forced callers reuse the just-finished pass
+        }
+        refreshToken &+= 1
+        let myToken = refreshToken
+        let task = Task { await self.performRefresh(force: force) }
+        refreshTask = task
+        await task.value
+        if refreshToken == myToken { refreshTask = nil }
+    }
+
+    private func performRefresh(force: Bool) async {
         isLoading = true
         defer { isLoading = false }
 
@@ -98,12 +127,12 @@ final class UsageStore {
         async let codexResult = CodexClient.fetch()
 
         // Claude is throttled to protect its rate-limited usage endpoint.
-        let claudeDue: Bool = if force || claudeLastAttempt == nil {
+        let claudeDue: Bool = if force {
             true
         } else if let last = claudeLastAttempt {
             Date.now.timeIntervalSince(last) >= claudeMinInterval
         } else {
-            true
+            true // never attempted yet
         }
         async let claudeResult: ProviderUsage? = claudeDue ? ClaudeClient.fetch() : nil
         if claudeDue { claudeLastAttempt = .now }

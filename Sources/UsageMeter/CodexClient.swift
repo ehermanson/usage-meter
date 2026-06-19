@@ -55,7 +55,7 @@ enum CodexClient {
 
         guard !sources.isEmpty else { return .failed("Codex", "No rate-limit data") }
 
-        let plan = prettyPlan(num: nil, str:
+        let plan = prettyPlan(
             (defaultRl?["planType"] ?? sources.first?.dict["planType"]) as? String)
 
         var pools: [UsagePool] = []
@@ -88,7 +88,7 @@ enum CodexClient {
         return limitId == "codex" ? nil : limitId
     }
 
-    private static func prettyPlan(num: Double?, str: String?) -> String? {
+    private static func prettyPlan(_ str: String?) -> String? {
         guard let raw = str, !raw.isEmpty else { return nil }
         switch raw.lowercased() {
         case "prolite", "pro_lite": return "Pro Lite"
@@ -247,7 +247,11 @@ private final class CodexRPCSession {
         lock.unlock()
 
         outPipe.fileHandleForReading.readabilityHandler = nil
-        if process.isRunning { process.terminate() }
+        try? inPipe.fileHandleForWriting.close()
+        let proc = process
+        if proc.isRunning { proc.terminate() }
+        // Reap the child off the caller's queue so it can't become a zombie.
+        DispatchQueue.global().async { proc.waitUntilExit() }
 
         switch result {
         case .success(let value): continuation.resume(returning: value)

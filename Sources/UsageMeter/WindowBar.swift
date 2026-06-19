@@ -5,7 +5,7 @@ struct WindowBar: View {
     let window: UsageWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(window.label)
                     .font(.system(size: 11))
@@ -16,15 +16,25 @@ struct WindowBar: View {
                     .monospacedDigit()
             }
 
-            ProgressView(value: window.clampedFraction)
-                .progressViewStyle(.linear)
-                .tint(barColor)
+            // Keep the reset hint tucked right under its bar so the trio reads
+            // as one group; separation from the next window comes from ProviderRow.
+            VStack(alignment: .leading, spacing: 0) {
+                ProgressView(value: window.clampedFraction)
+                    .progressViewStyle(.linear)
+                    .tint(barColor)
 
-            if let reset = window.resetAt {
-                Text(Format.relativeReset(reset))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                if let reset = window.resetAt {
+                    Text(Format.relativeReset(reset))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        // Counter the linear bar's built-in bottom padding so the
+                        // hint sits snug against the bar above it.
+                        .padding(.top, -3)
+                }
             }
+            // Counter the linear bar's built-in top padding so it sits snug under
+            // the label/percent row above it.
+            .padding(.top, -3)
         }
     }
 
