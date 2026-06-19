@@ -1,8 +1,10 @@
 import Foundation
 
 /// One rate-limit window for a provider (e.g. the 5-hour rolling window).
-struct UsageWindow: Identifiable {
-    let id = UUID()
+/// `id` is derived from the (unique-per-pool) label so identity survives refetches
+/// — a fresh fetch with the same window keeps its view, letting the bar animate.
+struct UsageWindow: Identifiable, Equatable {
+    var id: String { label }
     let label: String        // "5h", "Weekly", "7d · Sonnet"
     let usedPercent: Double  // 0...100
     let resetAt: Date?
@@ -12,15 +14,15 @@ struct UsageWindow: Identifiable {
 
 /// A named group of windows. `title == nil` is the provider's default pool;
 /// named pools (e.g. a per-model limit) carry a subheader.
-struct UsagePool: Identifiable {
-    let id = UUID()
+struct UsagePool: Identifiable, Equatable {
+    var id: String { title ?? "" }   // pool titles are unique within a provider
     let title: String?
     var windows: [UsageWindow]
 }
 
 /// Aggregated usage for a single provider.
-struct ProviderUsage: Identifiable {
-    let id = UUID()
+struct ProviderUsage: Identifiable, Equatable {
+    var id: String { name }       // one section per provider
     let name: String              // "Claude", "Codex"
     var pools: [UsagePool]
     var error: String?

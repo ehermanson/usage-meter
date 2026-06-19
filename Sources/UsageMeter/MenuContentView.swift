@@ -15,8 +15,8 @@ struct MenuContentView: View {
                 }
                 .padding(.vertical, 8)
             } else {
-                ForEach(Array(store.providers.enumerated()), id: \.element.id) { index, provider in
-                    if index > 0 {
+                ForEach(store.providers) { provider in
+                    if provider.id != store.providers.first?.id {
                         Divider().opacity(0.5)
                     }
                     ProviderRow(provider: provider)

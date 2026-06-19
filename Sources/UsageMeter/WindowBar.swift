@@ -22,6 +22,7 @@ struct WindowBar: View {
                 ProgressView(value: window.clampedFraction)
                     .progressViewStyle(.linear)
                     .tint(barColor)
+                    .animation(.default, value: window.usedPercent)
 
                 if let reset = window.resetAt {
                     Text(Format.relativeReset(reset))
@@ -36,6 +37,18 @@ struct WindowBar: View {
             // the label/percent row above it.
             .padding(.top, -3)
         }
+        // Read the label, percentage, and reset as a single VoiceOver element.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(window.label)
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var accessibilityValue: String {
+        var value = "\(Format.percent(window.usedPercent)) used"
+        if let reset = window.resetAt {
+            value += ", \(Format.relativeReset(reset))"
+        }
+        return value
     }
 
     private var barColor: Color {

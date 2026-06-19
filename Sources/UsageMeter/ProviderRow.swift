@@ -19,6 +19,7 @@ struct ProviderRow: View {
                 Circle()
                     .fill(accent)
                     .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
                 Text(provider.name)
                     .font(.system(size: 12, weight: .semibold))
                 if let plan = provider.plan {

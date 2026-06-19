@@ -11,7 +11,7 @@ struct MenuBarLabel: View {
         HStack(spacing: 3) {
             Image(systemName: icon)
             Text(title)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
                 .monospacedDigit()
         }
     }
