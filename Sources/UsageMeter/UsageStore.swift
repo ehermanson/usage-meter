@@ -116,10 +116,12 @@ final class UsageStore {
     /// The provider shown in the menu bar: the pinned one, else the highest 5h.
     private var menuBarProvider: ProviderUsage? {
         if let name = pinnedProvider,
-           let match = providers.first(where: { $0.name == name && $0.hasWindows }) {
+            let match = providers.first(where: { $0.name == name && $0.hasWindows })
+        {
             return match
         }
-        return providers
+        return
+            providers
             .filter { $0.hasWindows }
             .max { ($0.fiveHour?.usedPercent ?? -1) < ($1.fiveHour?.usedPercent ?? -1) }
     }
@@ -135,7 +137,7 @@ final class UsageStore {
         case ..<40: return "gauge.with.dots.needle.33percent"
         case ..<60: return "gauge.with.dots.needle.50percent"
         case ..<80: return "gauge.with.dots.needle.67percent"
-        default:    return "gauge.with.dots.needle.100percent"
+        default: return "gauge.with.dots.needle.100percent"
         }
     }
 
@@ -166,7 +168,7 @@ final class UsageStore {
     func refresh(force: Bool = false) async {
         if let task = refreshTask {
             await task.value
-            if !force { return } // non-forced callers reuse the just-finished pass
+            if !force { return }  // non-forced callers reuse the just-finished pass
         }
         refreshToken &+= 1
         let myToken = refreshToken
@@ -186,16 +188,18 @@ final class UsageStore {
         // Probe Claude only when due. After a success that's a calm 5-min cadence;
         // after consecutive failures it's an exponential back-off so we stop
         // hammering an endpoint that's telling us it's throttled.
-        let claudeInterval: TimeInterval = claudeFailureStreak == 0
+        let claudeInterval: TimeInterval =
+            claudeFailureStreak == 0
             ? claudeSuccessInterval
             : min(claudeBackoffBase * pow(2, Double(claudeFailureStreak - 1)), claudeBackoffMax)
-        let claudeDue: Bool = if force {
-            true
-        } else if let last = claudeLastAttempt {
-            Date.now.timeIntervalSince(last) >= claudeInterval
-        } else {
-            true // never attempted yet
-        }
+        let claudeDue: Bool =
+            if force {
+                true
+            } else if let last = claudeLastAttempt {
+                Date.now.timeIntervalSince(last) >= claudeInterval
+            } else {
+                true  // never attempted yet
+            }
         async let claudeResult: ProviderUsage? = claudeDue ? ClaudeClient.fetch() : nil
         if claudeDue { claudeLastAttempt = .now }
 
@@ -219,7 +223,7 @@ final class UsageStore {
             lastGood = fresh
             return fresh
         }
-        guard let prev = lastGood else { return fresh } // no history → surface the error
+        guard let prev = lastGood else { return fresh }  // no history → surface the error
         let note = fresh.retryable ? "throttled — showing last value" : (fresh.error ?? "stale")
         return ProviderUsage(
             name: prev.name,

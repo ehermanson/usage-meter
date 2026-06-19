@@ -8,8 +8,8 @@ struct ProviderRow: View {
     private var accent: Color {
         switch provider.name.lowercased() {
         case "claude": return .orange
-        case "codex":  return .teal
-        default:       return .accentColor
+        case "codex": return .teal
+        default: return .accentColor
         }
     }
 
@@ -76,12 +76,13 @@ struct ProviderRow: View {
         let resource: String
         switch name.lowercased() {
         case "claude": resource = "claude-logo"
-        case "codex":  resource = "codex-logo"
-        default:       return nil
+        case "codex": resource = "codex-logo"
+        default: return nil
         }
         if let cached = logoCache[resource] { return cached }
         guard let url = Bundle.module.url(forResource: resource, withExtension: "png"),
-              let image = NSImage(contentsOf: url) else { return nil }
+            let image = NSImage(contentsOf: url)
+        else { return nil }
         image.isTemplate = true
         logoCache[resource] = image
         return image

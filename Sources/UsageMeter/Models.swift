@@ -5,7 +5,7 @@ import Foundation
 /// — a fresh fetch with the same window keeps its view, letting the bar animate.
 struct UsageWindow: Identifiable, Equatable, Codable {
     var id: String { label }
-    let label: String        // "5h", "Weekly", "7d · Sonnet"
+    let label: String  // "5h", "Weekly", "7d · Sonnet"
     let usedPercent: Double  // 0...100
     let resetAt: Date?
 
@@ -15,18 +15,18 @@ struct UsageWindow: Identifiable, Equatable, Codable {
 /// A named group of windows. `title == nil` is the provider's default pool;
 /// named pools (e.g. a per-model limit) carry a subheader.
 struct UsagePool: Identifiable, Equatable, Codable {
-    var id: String { title ?? "" }   // pool titles are unique within a provider
+    var id: String { title ?? "" }  // pool titles are unique within a provider
     let title: String?
     var windows: [UsageWindow]
 }
 
 /// Aggregated usage for a single provider.
 struct ProviderUsage: Identifiable, Equatable, Codable {
-    var id: String { name }       // one section per provider
-    let name: String              // "Claude", "Codex"
+    var id: String { name }  // one section per provider
+    let name: String  // "Claude", "Codex"
     var pools: [UsagePool]
     var error: String?
-    var plan: String?             // "Max", "Pro", "Pro Lite", …
+    var plan: String?  // "Max", "Pro", "Pro Lite", …
     /// A soft, retryable failure (e.g. usage endpoint momentarily throttled) —
     /// the store keeps showing the last good values when this is set.
     var retryable: Bool = false
@@ -53,8 +53,10 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
         ProviderUsage(name: name, pools: pools, error: nil, plan: plan)
     }
 
-    static func failed(_ name: String, _ message: String,
-                       retryable: Bool = false, plan: String? = nil) -> ProviderUsage {
+    static func failed(
+        _ name: String, _ message: String,
+        retryable: Bool = false, plan: String? = nil
+    ) -> ProviderUsage {
         ProviderUsage(name: name, pools: [], error: message, plan: plan, retryable: retryable)
     }
 }

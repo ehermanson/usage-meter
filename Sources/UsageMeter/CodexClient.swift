@@ -29,13 +29,16 @@ enum CodexClient {
 
     // MARK: - Parsing
 
-    private static func parse(_ root: [String: Any]) -> ProviderUsage {
+    /// Exposed for tests. Maps a decoded `account/rateLimits/read` result to usage.
+    static func parse(_ root: [String: Any]) -> ProviderUsage {
         // Prefer the per-limit map (one entry per pool); fall back to the single
         // default object. Shape: { rateLimitsByLimitId: { id: {primary, secondary,
         // limitName, planType} }, rateLimits: { ... } }
-        let byId = root["rateLimitsByLimitId"] as? [String: Any]
+        let byId =
+            root["rateLimitsByLimitId"] as? [String: Any]
             ?? root["rate_limits_by_limit_id"] as? [String: Any]
-        let defaultRl = root["rateLimits"] as? [String: Any]
+        let defaultRl =
+            root["rateLimits"] as? [String: Any]
             ?? root["rate_limits"] as? [String: Any]
 
         var sources: [(id: String, dict: [String: Any])] = []
@@ -62,7 +65,9 @@ enum CodexClient {
         for src in sources {
             var windows: [UsageWindow] = []
             if let w = window(from: src.dict["primary"], fallbackLabel: "5h") { windows.append(w) }
-            if let w = window(from: src.dict["secondary"], fallbackLabel: "Weekly") { windows.append(w) }
+            if let w = window(from: src.dict["secondary"], fallbackLabel: "Weekly") {
+                windows.append(w)
+            }
             if windows.isEmpty { continue }
             let title = poolTitle(limitName: src.dict["limitName"] as? String, limitId: src.id)
             pools.append(UsagePool(title: title, windows: windows))
@@ -132,11 +137,13 @@ enum CodexClient {
     // MARK: - Locate the codex binary
 
     private static func findCodex() -> String? {
-        ProcessTools.findExecutable("codex", candidates: [
-            "/opt/homebrew/bin/codex",
-            "/usr/local/bin/codex",
-            "\(NSHomeDirectory())/.local/bin/codex",
-        ])
+        ProcessTools.findExecutable(
+            "codex",
+            candidates: [
+                "/opt/homebrew/bin/codex",
+                "/usr/local/bin/codex",
+                "\(NSHomeDirectory())/.local/bin/codex",
+            ])
     }
 }
 
@@ -186,14 +193,23 @@ private final class CodexRPCSession {
         }
 
         // 1. initialize
-        send(["jsonrpc": "2.0", "id": 1, "method": "initialize",
-              "params": ["clientInfo": ["name": "usage-meter", "version": "1.0.0"],
-                         "capabilities": ["experimentalApi": true]]])
+        send([
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": [
+                "clientInfo": ["name": "usage-meter", "version": "1.0.0"],
+                "capabilities": ["experimentalApi": true],
+            ],
+        ])
 
         // Watchdog timeout.
         DispatchQueue.global().asyncAfter(deadline: .now() + 10) { [weak self] in
-            self?.finish(.failure(NSError(domain: "Codex", code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "Timed out talking to codex app-server"])))
+            self?.finish(
+                .failure(
+                    NSError(
+                        domain: "Codex", code: -1,
+                        userInfo: [
+                            NSLocalizedDescriptionKey: "Timed out talking to codex app-server"
+                        ])))
         }
     }
 
@@ -203,7 +219,7 @@ private final class CodexRPCSession {
             let lineData = buffer.subdata(in: buffer.startIndex..<nl)
             buffer.removeSubrange(buffer.startIndex...nl)
             guard !lineData.isEmpty,
-                  let msg = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
+                let msg = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
             else { continue }
             handle(msg)
         }
@@ -211,22 +227,28 @@ private final class CodexRPCSession {
 
     private func handle(_ msg: [String: Any]) {
         guard let id = (msg["id"] as? NSNumber)?.intValue, msg["method"] == nil else {
-            return // notification or request from server — ignore
+            return  // notification or request from server — ignore
         }
         switch id {
-        case 1: // initialize response -> notify + ask for rate limits
+        case 1:  // initialize response -> notify + ask for rate limits
             send(["jsonrpc": "2.0", "method": "initialized"])
             send(["jsonrpc": "2.0", "id": 2, "method": "account/rateLimits/read"])
-        case 2: // rateLimits response
+        case 2:  // rateLimits response
             if let err = msg["error"] as? [String: Any] {
                 let m = (err["message"] as? String) ?? "RPC error"
-                finish(.failure(NSError(domain: "Codex", code: -2,
-                    userInfo: [NSLocalizedDescriptionKey: m])))
+                finish(
+                    .failure(
+                        NSError(
+                            domain: "Codex", code: -2,
+                            userInfo: [NSLocalizedDescriptionKey: m])))
             } else if let result = msg["result"] as? [String: Any] {
                 finish(.success(result))
             } else {
-                finish(.failure(NSError(domain: "Codex", code: -3,
-                    userInfo: [NSLocalizedDescriptionKey: "Empty rate-limit result"])))
+                finish(
+                    .failure(
+                        NSError(
+                            domain: "Codex", code: -3,
+                            userInfo: [NSLocalizedDescriptionKey: "Empty rate-limit result"])))
             }
         default:
             break

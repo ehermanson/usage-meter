@@ -30,14 +30,16 @@ enum MenuBarRenderer {
         let image = NSImage(size: NSSize(width: max(width, 1), height: max(height, 1)))
         image.lockFocus()
         // Both icon and text are vertically centered within the shared height.
-        symbol?.draw(in: NSRect(
-            x: 0, y: (height - symbolSize.height) / 2,
-            width: symbolSize.width, height: symbolSize.height
-        ))
-        text.draw(at: NSPoint(
-            x: symbolSize.width + spacing,
-            y: (height - textSize.height) / 2
-        ))
+        symbol?.draw(
+            in: NSRect(
+                x: 0, y: (height - symbolSize.height) / 2,
+                width: symbolSize.width, height: symbolSize.height
+            ))
+        text.draw(
+            at: NSPoint(
+                x: symbolSize.width + spacing,
+                y: (height - textSize.height) / 2
+            ))
         image.unlockFocus()
 
         // Template so the menu bar tints it for light/dark and the open/highlight state.

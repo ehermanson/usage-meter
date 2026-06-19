@@ -11,8 +11,10 @@ struct UsageMeterApp: App {
         MenuBarExtra {
             MenuContentView(store: store)
         } label: {
-            Image(nsImage: MenuBarRenderer.image(icon: store.menuBarIcon,
-                                                 title: store.menuBarTitle))
+            Image(
+                nsImage: MenuBarRenderer.image(
+                    icon: store.menuBarIcon,
+                    title: store.menuBarTitle))
         }
         .menuBarExtraStyle(.window)
     }

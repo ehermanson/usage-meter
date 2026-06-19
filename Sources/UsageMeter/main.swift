@@ -14,8 +14,10 @@ if CommandLine.arguments.contains("--selftest") {
                 if let title = pool.title { print("  \(title)") }
                 for w in pool.windows {
                     let reset = Format.relativeReset(w.resetAt)
-                    print(String(format: "  %-14@ %5.1f%%  %@",
-                                 w.label as NSString, w.usedPercent, reset as NSString))
+                    print(
+                        String(
+                            format: "  %-14@ %5.1f%%  %@",
+                            w.label as NSString, w.usedPercent, reset as NSString))
                 }
             }
             if let err = p.error {
@@ -40,9 +42,9 @@ if CommandLine.arguments.contains("--selftest") {
 if let i = CommandLine.arguments.firstIndex(of: "--login") {
     let action = CommandLine.arguments[safe: i + 1] ?? "status"
     switch action {
-    case "on":  print(LoginItem.setEnabled(true) ? "login item: enabled" : "failed to enable")
+    case "on": print(LoginItem.setEnabled(true) ? "login item: enabled" : "failed to enable")
     case "off": print(LoginItem.setEnabled(false) ? "login item: disabled" : "failed to disable")
-    default:    print("login item: \(LoginItem.isEnabled ? "enabled" : "not enabled")")
+    default: print("login item: \(LoginItem.isEnabled ? "enabled" : "not enabled")")
     }
     exit(0)
 }

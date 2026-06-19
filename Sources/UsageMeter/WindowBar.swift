@@ -53,9 +53,9 @@ struct WindowBar: View {
 
     private var barColor: Color {
         switch window.usedPercent {
-        case ..<60: .green   // healthy
+        case ..<60: .green  // healthy
         case ..<90: .yellow  // getting close
-        default: .red        // nearly exhausted
+        default: .red  // nearly exhausted
         }
     }
 }

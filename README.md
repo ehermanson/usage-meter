@@ -78,3 +78,27 @@ System Settings → General → Login Items → **+** → add `UsageMeter.app`.
   it's git-ignored and not bundled into the `.app`; the app shells out to it in
   place.
 - The app is ad-hoc codesigned (no Apple Developer account needed).
+
+## Development
+
+Swift sources are formatted and lint-checked with the `swift format` tool
+bundled with the Swift 6 toolchain, configured by [`.swift-format`](.swift-format).
+
+```sh
+swift format lint --strict --configuration .swift-format -r Sources Tests  # check
+swift format --in-place --configuration .swift-format -r Sources Tests     # fix
+```
+
+Unit tests (Swift Testing) cover the provider rate-limit parsers and the
+display/formatting logic — the pure parts that don't touch the network:
+
+```sh
+swift test
+```
+
+CI (`.github/workflows/ci.yml`) runs the lint, a release build, and the test
+suite on every push and pull request, and syntax-checks the Node helper.
+
+## License
+
+[MIT](LICENSE) © Eric Hermanson

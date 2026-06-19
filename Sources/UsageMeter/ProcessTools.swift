@@ -18,10 +18,12 @@ enum ProcessTools {
     }
 
     /// Run an executable to completion, capturing stdout/stderr, with a timeout.
-    static func run(executable: String,
-                    arguments: [String],
-                    cwd: URL? = nil,
-                    timeout: TimeInterval = 40) async throws -> Result {
+    static func run(
+        executable: String,
+        arguments: [String],
+        cwd: URL? = nil,
+        timeout: TimeInterval = 40
+    ) async throws -> Result {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Result, Error>) in
             DispatchQueue.global().async {
                 let proc = Process()
@@ -73,11 +75,12 @@ enum ProcessTools {
                 if timedOut.value {
                     cont.resume(throwing: ProcessError.timedOut)
                 } else {
-                    cont.resume(returning: Result(
-                        stdout: String(data: outData, encoding: .utf8) ?? "",
-                        stderr: String(data: errData, encoding: .utf8) ?? "",
-                        exitCode: proc.terminationStatus
-                    ))
+                    cont.resume(
+                        returning: Result(
+                            stdout: String(data: outData, encoding: .utf8) ?? "",
+                            stderr: String(data: errData, encoding: .utf8) ?? "",
+                            exitCode: proc.terminationStatus
+                        ))
                 }
             }
         }
@@ -86,11 +89,13 @@ enum ProcessTools {
     /// Locate `node`, including version-managed installs only reachable via the
     /// user's login-shell PATH (the menu-bar app inherits a minimal PATH).
     static func findNode() -> String? {
-        findExecutable("node", candidates: [
-            "/opt/homebrew/bin/node",
-            "/usr/local/bin/node",
-            "\(NSHomeDirectory())/.local/bin/node",
-        ])
+        findExecutable(
+            "node",
+            candidates: [
+                "/opt/homebrew/bin/node",
+                "/usr/local/bin/node",
+                "\(NSHomeDirectory())/.local/bin/node",
+            ])
     }
 
     static func findExecutable(_ name: String, candidates: [String]) -> String? {

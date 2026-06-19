@@ -27,15 +27,17 @@ enum ClaudeClient {
             return .failed("Claude", error.localizedDescription, retryable: true)
         }
 
-        guard let line = result.stdout
-            .split(separator: "\n")
-            .last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }),
-              let data = String(line).data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard
+            let line = result.stdout
+                .split(separator: "\n")
+                .last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }),
+            let data = String(line).data(using: .utf8),
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
             let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            return .failed("Claude", stderr.isEmpty ? "No output from SDK helper" : stderr,
-                           retryable: true)
+            return .failed(
+                "Claude", stderr.isEmpty ? "No output from SDK helper" : stderr,
+                retryable: true)
         }
 
         let plan = prettyPlan(root["subscription_type"] as? String)
@@ -66,7 +68,8 @@ enum ClaudeClient {
         ("overage", "Overage"),
     ]
 
-    private static func parse(_ limits: [String: Any], plan: String?) -> ProviderUsage {
+    /// Exposed for tests. Maps a decoded `rate_limits` dict to provider usage.
+    static func parse(_ limits: [String: Any], plan: String?) -> ProviderUsage {
         var windows: [UsageWindow] = []
         var consumed = Set<String>()
 
@@ -92,10 +95,12 @@ enum ClaudeClient {
     /// this skips non-window keys like `extra_usage`, `limits`, and `spend`.
     private static func window(_ raw: Any?, label: String) -> UsageWindow? {
         guard let dict = raw as? [String: Any],
-              let util = (dict["utilization"] as? NSNumber)?.doubleValue,
-              dict["resets_at"] is String else { return nil }
-        return UsageWindow(label: label, usedPercent: util,
-                           resetAt: isoDate(dict["resets_at"] as? String))
+            let util = (dict["utilization"] as? NSNumber)?.doubleValue,
+            dict["resets_at"] is String
+        else { return nil }
+        return UsageWindow(
+            label: label, usedPercent: util,
+            resetAt: isoDate(dict["resets_at"] as? String))
     }
 
     private static func prettyKey(_ key: String) -> String {

@@ -1,5 +1,24 @@
+# Swift / SwiftPM
 .build/
-build/
-.DS_Store
+.swiftpm/
+Package.resolved
+DerivedData/
 *.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+
+# App build output
+build/
+
+# Node (helper)
 helpers/node_modules/
+npm-debug.log*
+
+# macOS
+.DS_Store
+
+# Editor cruft
+*.swp
+*~
+.idea/

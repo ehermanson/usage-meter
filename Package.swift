@@ -12,6 +12,11 @@ let package = Package(
                 .copy("Resources/claude-logo.png"),
                 .copy("Resources/codex-logo.png")
             ]
+        ),
+        .testTarget(
+            name: "UsageMeterTests",
+            dependencies: ["UsageMeter"],
+            path: "Tests/UsageMeterTests"
         )
     ]
 )

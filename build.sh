@@ -44,7 +44,7 @@ cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key>  <string>14.0</string>
     <key>LSUIElement</key>             <true/>
     <key>ClaudeHelperPath</key>        <string>${HELPER_PATH}</string>
-    <key>NSHumanReadableCopyright</key><string>Personal use</string>
+    <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Eric Hermanson. MIT License.</string>
 </dict>
 </plist>
 PLIST

@@ -65,12 +65,16 @@ struct MenuContentView: View {
 
     private var menuBarPicker: some View {
         Menu {
-            Button { store.setPinned(nil) } label: {
+            Button {
+                store.setPinned(nil)
+            } label: {
                 pickerRow(UsageStore.autoLabel, checked: store.pinnedProvider == nil)
             }
             if !store.selectableProviders.isEmpty { Divider() }
             ForEach(store.selectableProviders, id: \.self) { name in
-                Button { store.setPinned(name) } label: {
+                Button {
+                    store.setPinned(name)
+                } label: {
                     pickerRow(name, checked: store.pinnedProvider == name)
                 }
             }
@@ -132,7 +136,7 @@ struct MenuContentView: View {
 
     private func applyLaunchAtLogin(_ enabled: Bool) {
         if !LoginItem.setEnabled(enabled) {
-            launchAtLogin = LoginItem.isEnabled // revert on failure
+            launchAtLogin = LoginItem.isEnabled  // revert on failure
         }
     }
 }
