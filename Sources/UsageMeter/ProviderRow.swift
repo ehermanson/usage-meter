@@ -8,6 +8,8 @@ struct ProviderRow: View {
     let accent: Color
     /// Bundled logo resource name, supplied by the provider definition.
     let logoResource: String?
+    /// Show headroom left instead of usage consumed.
+    var showRemaining: Bool = false
 
     /// Source logos are pre-trimmed to their opaque bounds, so a single frame
     /// renders both marks at the same visual size.
@@ -51,7 +53,7 @@ struct ProviderRow: View {
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(pool.windows) { window in
-                        WindowBar(window: window)
+                        WindowBar(window: window, showRemaining: showRemaining)
                     }
                 }
             }

@@ -23,7 +23,8 @@ struct MenuContentView: View {
                     ProviderRow(
                         provider: provider,
                         accent: style.accent,
-                        logoResource: style.logoResource)
+                        logoResource: style.logoResource,
+                        showRemaining: store.showRemaining)
                 }
             }
 
@@ -32,6 +33,10 @@ struct MenuContentView: View {
             menuBarPicker
 
             Toggle("Compact (5hr only)", isOn: $store.compactMenuBar)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
+
+            Toggle("Show % remaining", isOn: $store.showRemaining)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
 

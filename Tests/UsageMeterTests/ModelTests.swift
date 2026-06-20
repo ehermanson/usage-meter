@@ -12,6 +12,13 @@ struct ModelTests {
         #expect(UsageWindow(label: "5h", usedPercent: 150, resetAt: nil).clampedFraction == 1)
     }
 
+    @Test("remainingPercent complements usedPercent, clamped to 0...100")
+    func remainingPercent() {
+        #expect(UsageWindow(label: "5h", usedPercent: 11, resetAt: nil).remainingPercent == 89)
+        #expect(UsageWindow(label: "5h", usedPercent: -10, resetAt: nil).remainingPercent == 100)
+        #expect(UsageWindow(label: "5h", usedPercent: 150, resetAt: nil).remainingPercent == 0)
+    }
+
     @Test("identity is derived from the label")
     func windowIdentity() {
         #expect(UsageWindow(label: "Weekly", usedPercent: 1, resetAt: nil).id == "Weekly")

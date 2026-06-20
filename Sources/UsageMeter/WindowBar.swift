@@ -3,6 +3,9 @@ import SwiftUI
 /// A single usage window: label, percentage, a colored progress bar, and reset.
 struct WindowBar: View {
     let window: UsageWindow
+    /// When true, show headroom left and drain the bar as usage rises (battery
+    /// style); otherwise show usage consumed and fill the bar.
+    var showRemaining: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,12 +22,12 @@ struct WindowBar: View {
                         .monospacedDigit()
                 }
                 Spacer()
-                Text(Format.percent(window.usedPercent))
+                Text(Format.percent(displayedPercent))
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
             }
 
-            ProgressView(value: window.clampedFraction)
+            ProgressView(value: barFraction)
                 .progressViewStyle(.linear)
                 .tint(barColor)
                 .animation(.default, value: window.usedPercent)
@@ -38,8 +41,18 @@ struct WindowBar: View {
         .accessibilityValue(accessibilityValue)
     }
 
+    private var displayedPercent: Double {
+        showRemaining ? window.remainingPercent : window.usedPercent
+    }
+
+    /// The bar always represents what the number shows: fills with usage in the
+    /// default mode, drains toward empty as headroom shrinks in remaining mode.
+    private var barFraction: Double {
+        showRemaining ? 1 - window.clampedFraction : window.clampedFraction
+    }
+
     private var accessibilityValue: String {
-        var value = "\(Format.percent(window.usedPercent)) used"
+        var value = "\(Format.percent(displayedPercent)) \(showRemaining ? "left" : "used")"
         if let reset = window.resetAt {
             value += ", \(Format.relativeReset(reset))"
         }

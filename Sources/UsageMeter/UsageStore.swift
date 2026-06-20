@@ -20,6 +20,13 @@ final class UsageStore {
         didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
     }
 
+    /// Show each window as percent *remaining* (e.g. "89%") instead of percent
+    /// *used* ("11%). Flips the number, the bar fill, and the menu-bar title
+    /// together; the danger color still keys off actual usage.
+    var showRemaining: Bool = UserDefaults.standard.bool(forKey: "showRemaining") {
+        didSet { UserDefaults.standard.set(showRemaining, forKey: "showRemaining") }
+    }
+
     /// The providers polled each pass, in display order. Add one here to surface a
     /// new source — the fetch loop, throttling, last-good caching, and section
     /// styling are all keyed off this list, so nothing else needs to change.
@@ -148,15 +155,20 @@ final class UsageStore {
         guard let p = menuBarProvider else { return "—" }
         var parts: [String] = []
         if let f = p.fiveHour {
-            parts.append("\(Self.shortLabel(f.label)) \(Format.percent(f.usedPercent))")
+            parts.append("\(Self.shortLabel(f.label)) \(Format.percent(displayPercent(f)))")
         }
         if !compactMenuBar, let w = p.weekly, w.id != p.fiveHour?.id {
-            parts.append("\(Self.shortLabel(w.label)) \(Format.percent(w.usedPercent))")
+            parts.append("\(Self.shortLabel(w.label)) \(Format.percent(displayPercent(w)))")
         }
         let body = parts.joined(separator: " · ")
         if body.isEmpty { return p.name }
         // Only label the provider when more than one is available.
         return selectableProviders.count > 1 ? "\(p.name)  \(body)" : body
+    }
+
+    /// The percentage to show for a window, honoring the used/remaining setting.
+    func displayPercent(_ window: UsageWindow) -> Double {
+        showRemaining ? window.remainingPercent : window.usedPercent
     }
 
     /// Compact window labels for the menu bar: the verbose pool labels collapse to

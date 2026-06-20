@@ -10,6 +10,9 @@ struct UsageWindow: Identifiable, Equatable, Codable {
     let resetAt: Date?
 
     var clampedFraction: Double { max(0, min(1, usedPercent / 100)) }
+
+    /// Headroom left in the window, 0...100 — the complement of `usedPercent`.
+    var remainingPercent: Double { max(0, min(100, 100 - usedPercent)) }
 }
 
 /// A named group of windows. `title == nil` is the provider's default pool;
