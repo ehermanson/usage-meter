@@ -65,16 +65,25 @@ enum Format {
     /// "resets in 3h 12m" / "resets in 2d 4h"
     static func relativeReset(_ date: Date?) -> String {
         guard let date else { return "" }
+        let duration = resetDuration(date)
+        return duration == "resetting…" ? duration : "resets in \(duration)"
+    }
+
+    /// Just the time-remaining part: "12m" / "3h 12m" / "2d 4h" / "resetting…".
+    /// Used inline next to a window's percentage where the "resets in" prefix
+    /// would cost too much width.
+    static func resetDuration(_ date: Date?) -> String {
+        guard let date else { return "" }
         let secs = date.timeIntervalSinceNow
         if secs <= 0 { return "resetting…" }
         let mins = Int(secs / 60)
-        if mins < 60 { return "resets in \(mins)m" }
+        if mins < 60 { return "\(mins)m" }
         let hours = mins / 60
         let remMins = mins % 60
-        if hours < 24 { return "resets in \(hours)h \(remMins)m" }
+        if hours < 24 { return "\(hours)h \(remMins)m" }
         let days = hours / 24
         let remHours = hours % 24
-        return "resets in \(days)d \(remHours)h"
+        return "\(days)d \(remHours)h"
     }
 
     static func percent(_ value: Double) -> String {
