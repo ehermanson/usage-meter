@@ -27,21 +27,15 @@ function fail(message, code, subscription) {
 const watchdog = setTimeout(() => fail("Timed out reading Claude usage", "timeout"), OVERALL_TIMEOUT_MS);
 
 async function resolveStartup() {
-  // Prefer a locally installed SDK; fall back to Relay's copy if present.
-  const candidates = [
-    "@anthropic-ai/claude-agent-sdk",
-    "/Users/erichermanson/projects/relay/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs",
-  ];
-  let lastErr;
-  for (const spec of candidates) {
-    try {
-      const mod = await import(spec);
-      if (typeof mod.startup === "function") return mod.startup;
-    } catch (err) {
-      lastErr = err;
-    }
+  // Resolve the SDK from this helper's own node_modules — bundled next to the
+  // script inside the .app, or installed in helpers/ during development.
+  try {
+    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    if (typeof mod.startup === "function") return mod.startup;
+    throw new Error("startup() not exported");
+  } catch (err) {
+    throw new Error(`Claude Agent SDK not found: ${err?.message ?? "unknown"}`);
   }
-  throw new Error(`Claude Agent SDK not found: ${lastErr?.message ?? "unknown"}`);
 }
 
 async function main() {

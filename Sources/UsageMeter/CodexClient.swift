@@ -8,13 +8,21 @@ import Foundation
 enum CodexClient {
     static func fetch() async -> ProviderUsage {
         guard let codex = findCodex() else {
-            return .failed("Codex", "codex binary not found")
+            return .needsSetup(
+                "Codex", "The Codex CLI isn't installed.", url: SetupDetection.codexURL)
         }
         do {
             let result = try await exchange(codexPath: codex)
             return parse(result)
         } catch {
-            return .failed("Codex", error.localizedDescription)
+            let msg = error.localizedDescription
+            // A logged-out / unauthenticated app-server is a fixable setup state,
+            // not a hard error.
+            if SetupDetection.looksLikeNotSignedIn(msg) {
+                return .needsSetup(
+                    "Codex", "Sign in to Codex to track usage.", url: SetupDetection.codexURL)
+            }
+            return .failed("Codex", msg)
         }
     }
 

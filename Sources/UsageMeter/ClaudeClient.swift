@@ -9,10 +9,12 @@ import Foundation
 enum ClaudeClient {
     static func fetch() async -> ProviderUsage {
         guard let node = ProcessTools.findNode() else {
-            return .failed("Claude", "node not found (needed for the Claude SDK helper)")
+            return .needsSetup(
+                "Claude", "Node.js is required to read Claude usage.",
+                url: SetupDetection.nodeURL)
         }
         guard let helper = findHelper() else {
-            return .failed("Claude", "claude-usage.mjs helper not found")
+            return .failed("Claude", "Claude helper missing from the app bundle")
         }
 
         let result: ProcessTools.Result
@@ -44,8 +46,23 @@ enum ClaudeClient {
 
         if (root["ok"] as? Bool) != true {
             let msg = (root["error"] as? String) ?? "Claude usage unavailable"
-            let retryable = (root["code"] as? String) == "throttled"
-            return .failed("Claude", msg, retryable: retryable, plan: plan)
+            let code = root["code"] as? String
+            if code == "throttled" {
+                return .failed("Claude", msg, retryable: true, plan: plan)
+            }
+            // The SDK couldn't even start (Claude Code not installed) or reported
+            // an auth failure — surface a calm, fixable hint instead of a red error.
+            if SetupDetection.looksLikeMissingTool(msg) {
+                return .needsSetup(
+                    "Claude", "Claude Code isn't installed or set up.",
+                    url: SetupDetection.claudeCodeURL, plan: plan)
+            }
+            if SetupDetection.looksLikeNotSignedIn(msg) {
+                return .needsSetup(
+                    "Claude", "Sign in to Claude Code to track usage.",
+                    url: SetupDetection.claudeCodeURL, plan: plan)
+            }
+            return .failed("Claude", msg, retryable: false, plan: plan)
         }
 
         guard let limits = root["rate_limits"] as? [String: Any] else {
@@ -135,15 +152,24 @@ enum ClaudeClient {
 
     // MARK: - Locate the helper script
 
-    /// Resolved in priority order: build-time path baked into Info.plist,
-    /// an env override, then the known project location.
+    /// Resolved in priority order:
+    ///   1. the copy bundled inside the .app (`Resources/helpers/`) — the shipping
+    ///      path, self-contained with its own `node_modules`;
+    ///   2. an env override (`USAGE_METER_HELPER`) for development;
+    ///   3. a legacy Info.plist baked path, then the project checkout — so
+    ///      `swift run` from a dev tree still works without a bundle.
     private static func findHelper() -> URL? {
         var candidates: [String] = []
-        if let baked = Bundle.main.object(forInfoDictionaryKey: "ClaudeHelperPath") as? String {
-            candidates.append(baked)
+        if let bundled = Bundle.main.resourceURL?
+            .appendingPathComponent("helpers/claude-usage.mjs").path
+        {
+            candidates.append(bundled)
         }
         if let env = ProcessInfo.processInfo.environment["USAGE_METER_HELPER"] {
             candidates.append(env)
+        }
+        if let baked = Bundle.main.object(forInfoDictionaryKey: "ClaudeHelperPath") as? String {
+            candidates.append(baked)
         }
         candidates.append("\(NSHomeDirectory())/projects/usage-meter/helpers/claude-usage.mjs")
         for c in candidates where FileManager.default.fileExists(atPath: c) {

@@ -42,6 +42,9 @@ enum GeminiClient {
             let buckets = try await retrieveQuota(token: token, project: project)
             return parse(buckets)
         } catch let error as GeminiError {
+            if error.setupNeeded {
+                return .needsSetup(providerName, error.message)
+            }
             return .failed(providerName, error.message, retryable: error.retryable)
         } catch {
             return .failed(providerName, error.localizedDescription, retryable: true)
@@ -184,8 +187,8 @@ enum GeminiClient {
     ) async throws -> (value: String, expiry: Date) {
         guard !candidates.isEmpty else {
             throw GeminiError(
-                "Not signed in — authenticate with Antigravity or the Gemini CLI",
-                retryable: false)
+                "Sign in with Antigravity or the Gemini CLI to track usage.",
+                retryable: false, setupNeeded: true)
         }
         var lastError: Error?
         for creds in candidates {
@@ -193,7 +196,9 @@ enum GeminiClient {
                 return (creds.accessToken, expiry)
             }
             guard let refreshToken = creds.refreshToken else {
-                lastError = GeminiError("Gemini token expired — re-authenticate in your sign-in tool")
+                lastError = GeminiError(
+                    "Gemini sign-in expired — re-authenticate in your sign-in tool.",
+                    retryable: false, setupNeeded: true)
                 continue
             }
             do {
@@ -283,9 +288,13 @@ enum GeminiClient {
     private struct GeminiError: Error {
         let message: String
         let retryable: Bool
-        init(_ message: String, retryable: Bool = true) {
+        /// True when the failure is a fixable setup state (no credentials from any
+        /// sign-in tool) rather than a transient API error.
+        let setupNeeded: Bool
+        init(_ message: String, retryable: Bool = true, setupNeeded: Bool = false) {
             self.message = message
             self.retryable = retryable
+            self.setupNeeded = setupNeeded
         }
     }
 

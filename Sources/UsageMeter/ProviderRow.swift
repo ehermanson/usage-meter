@@ -58,13 +58,31 @@ struct ProviderRow: View {
                 }
             }
 
-            // A note shown alongside windows means we're displaying a stale
-            // value; with no windows it's a hard error.
-            if let note = provider.error {
+            // A provider that just needs setup (tool missing / not signed in) is
+            // an expected state, not a failure — show a calm, actionable hint.
+            if let setup = provider.setup, provider.allWindows.isEmpty {
+                setupHint(setup)
+            } else if let note = provider.error {
+                // A note shown alongside windows means we're displaying a stale
+                // value; with no windows it's a hard error.
                 Text(note)
                     .font(.system(size: 10))
                     .foregroundStyle(provider.allWindows.isEmpty ? .red : .orange)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func setupHint(_ setup: SetupHint) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(setup.message)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let urlString = setup.url, let url = URL(string: urlString) {
+                Link("Set up ↗", destination: url)
+                    .font(.system(size: 10, weight: .medium))
             }
         }
     }

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      The app is NOT sandboxed: it must spawn external CLIs (node, codex) and read
+      another tool's Keychain item (Gemini). Sandboxing would forbid both, so this
+      ships as a Developer ID (direct-download) build rather than a Mac App Store one.
+
+      Hardened runtime (required for notarization) is applied at sign time via
+      `codesign --options runtime`. Library validation is disabled so the bundled
+      Node helper can load whatever its node_modules pull in.
+    -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

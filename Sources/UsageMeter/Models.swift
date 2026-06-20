@@ -23,6 +23,15 @@ struct UsagePool: Identifiable, Equatable, Codable {
     var windows: [UsageWindow]
 }
 
+/// A provider that can't report usage because something on *this machine* needs
+/// setting up — a missing CLI/runtime, or simply not being signed in. This is an
+/// expected, calm state (not an error), so the UI presents it gently and points
+/// the user at the fix instead of showing an alarming red message.
+struct SetupHint: Equatable, Codable {
+    let message: String  // "Sign in to Claude Code to track usage"
+    var url: String? = nil  // optional "Set up ↗" link
+}
+
 /// Aggregated usage for a single provider.
 struct ProviderUsage: Identifiable, Equatable, Codable {
     var id: String { name }  // one section per provider
@@ -33,6 +42,9 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
     /// A soft, retryable failure (e.g. usage endpoint momentarily throttled) —
     /// the store keeps showing the last good values when this is set.
     var retryable: Bool = false
+    /// Set when the provider needs user setup (tool not installed / not signed
+    /// in). Rendered as a calm hint rather than an error when there are no windows.
+    var setup: SetupHint? = nil
 
     var allWindows: [UsageWindow] { pools.flatMap { $0.windows } }
 
@@ -61,6 +73,17 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
         retryable: Bool = false, plan: String? = nil
     ) -> ProviderUsage {
         ProviderUsage(name: name, pools: [], error: message, plan: plan, retryable: retryable)
+    }
+
+    /// The provider needs setup on this machine (tool missing / not signed in).
+    /// Not retryable in the throttle sense — there's no stale value worth keeping,
+    /// so the calm hint is shown until the user acts and a later probe succeeds.
+    static func needsSetup(
+        _ name: String, _ message: String, url: String? = nil, plan: String? = nil
+    ) -> ProviderUsage {
+        ProviderUsage(
+            name: name, pools: [], error: nil, plan: plan, retryable: false,
+            setup: SetupHint(message: message, url: url))
     }
 }
 
