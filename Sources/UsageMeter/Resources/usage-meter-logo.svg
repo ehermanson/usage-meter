@@ -15,7 +15,7 @@
     <path d="M248 669 A294 294 0 0 1 280 359" fill="none" stroke="#2fd67f" stroke-linecap="round" stroke-width="70"/>
     <path d="M356 291 A294 294 0 0 1 668 291" fill="none" stroke="#f2bc48" stroke-linecap="round" stroke-width="70"/>
     <path d="M744 359 A294 294 0 0 1 801 669" fill="none" stroke="#f05d52" stroke-linecap="round" stroke-width="70"/>
-    <line x1="512" y1="620" x2="694" y2="438" stroke="#f7f4ea" stroke-linecap="round" stroke-width="48"/>
+    <path d="M550 630 L502 582 L691 420 Q726 386 711 440 Z" fill="#f7f4ea"/>
     <circle cx="512" cy="620" r="62" fill="#f7f4ea"/>
     <circle cx="512" cy="620" r="26" fill="#15191d"/>
   </g>
