@@ -43,4 +43,39 @@ struct ClaudeParseTests {
         #expect(usage.plan == "Pro")
         #expect(!usage.hasWindows)
     }
+
+    @Test("enterprise dollar-budget usage surfaces as a Spend window with amounts")
+    func parsesEnterpriseSpend() {
+        // Enterprise reports all time windows null; the real signal is a monthly
+        // dollar spend against a limit under `spend` (no resets_at).
+        let limits: [String: Any] = [
+            "five_hour": NSNull(),
+            "seven_day": NSNull(),
+            "spend": [
+                "used": ["amount_minor": 23731, "currency": "USD", "exponent": 2],
+                "limit": ["amount_minor": 30000, "currency": "USD", "exponent": 2],
+                "percent": 79,
+                "severity": "warning",
+                "enabled": true,
+            ],
+            "limits": [],
+        ]
+        let usage = ClaudeClient.parse(limits, plan: "Enterprise")
+        #expect(usage.error == nil)
+        let windows = usage.allWindows
+        #expect(windows.map(\.label) == ["Spend"])
+        #expect(windows.first?.usedPercent == 79)
+        #expect(windows.first?.resetAt == nil)
+        #expect(windows.first?.detail == "$237 / $300")
+    }
+
+    @Test("disabled spend is ignored")
+    func ignoresDisabledSpend() {
+        let limits: [String: Any] = [
+            "spend": ["percent": 0, "enabled": false, "limit": NSNull()]
+        ]
+        let usage = ClaudeClient.parse(limits, plan: "Max")
+        #expect(!usage.hasWindows)
+        #expect(usage.error != nil)
+    }
 }

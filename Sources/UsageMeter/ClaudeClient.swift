@@ -110,6 +110,13 @@ enum ClaudeClient {
             if let w = window(value, label: prettyKey(key)) { windows.append(w) }
         }
 
+        // Dollar-budget usage (Enterprise plans, or any plan with extra usage
+        // enabled) reports no time windows — just a monthly spend against a limit.
+        // Surface it so those users see something instead of "No usage windows".
+        if let spend = spendWindow(limits["spend"]) {
+            windows.append(spend)
+        }
+
         if windows.isEmpty {
             return .failed("Claude", "No usage windows", retryable: true, plan: plan)
         }
@@ -126,6 +133,34 @@ enum ClaudeClient {
         return UsageWindow(
             label: label, usedPercent: util,
             resetAt: isoDate(dict["resets_at"] as? String))
+    }
+
+    /// The `spend` entry is a monthly dollar budget (used vs limit), not a time
+    /// window — shown only when enabled, with the dollar amounts as the caption.
+    private static func spendWindow(_ raw: Any?) -> UsageWindow? {
+        guard let dict = raw as? [String: Any],
+            (dict["enabled"] as? Bool) == true,
+            let percent = (dict["percent"] as? NSNumber)?.doubleValue
+        else { return nil }
+        let detail: String?
+        if let used = money(dict["used"]), let limit = money(dict["limit"]) {
+            detail = "\(used) / \(limit)"
+        } else {
+            detail = nil
+        }
+        return UsageWindow(label: "Spend", usedPercent: percent, resetAt: nil, detail: detail)
+    }
+
+    /// Formats a `{amount_minor, currency, exponent}` money object as a whole-unit
+    /// currency string, e.g. `{23731, USD, 2}` → "$237".
+    private static func money(_ raw: Any?) -> String? {
+        guard let dict = raw as? [String: Any],
+            let minor = (dict["amount_minor"] as? NSNumber)?.doubleValue,
+            let exponent = (dict["exponent"] as? NSNumber)?.intValue
+        else { return nil }
+        let code = (dict["currency"] as? String) ?? "USD"
+        let amount = minor / pow(10, Double(exponent))
+        return amount.formatted(.currency(code: code).precision(.fractionLength(0)))
     }
 
     private static func prettyKey(_ key: String) -> String {

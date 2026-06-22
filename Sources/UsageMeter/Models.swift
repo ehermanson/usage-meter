@@ -8,6 +8,9 @@ struct UsageWindow: Identifiable, Equatable, Codable {
     let label: String  // "5h", "Weekly", "7d · Sonnet"
     let usedPercent: Double  // 0...100
     let resetAt: Date?
+    /// Optional caption shown where the reset countdown would go, for windows
+    /// without a reset — e.g. a dollar-budget window's "$237 / $300".
+    var detail: String? = nil
 
     var clampedFraction: Double { max(0, min(1, usedPercent / 100)) }
 

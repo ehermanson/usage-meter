@@ -20,6 +20,11 @@ struct WindowBar: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                         .monospacedDigit()
+                } else if let detail = window.detail {
+                    Text(detail)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
                 }
                 Spacer()
                 Text(Format.percent(displayedPercent))
