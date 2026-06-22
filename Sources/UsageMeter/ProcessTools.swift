@@ -91,12 +91,16 @@ enum ProcessTools {
     /// Locate `node`, including version-managed installs only reachable via the
     /// user's login-shell PATH (the menu-bar app inherits a minimal PATH).
     static func findNode() -> String? {
-        findExecutable(
+        let home = NSHomeDirectory()
+        return findExecutable(
             "node",
             candidates: [
                 "/opt/homebrew/bin/node",
                 "/usr/local/bin/node",
-                "\(NSHomeDirectory())/.local/bin/node",
+                "\(home)/.local/bin/node",
+                "\(home)/.volta/bin/node",  // Volta
+                "\(home)/.asdf/shims/node",  // asdf
+                "/opt/local/bin/node",  // MacPorts
             ])
     }
 
@@ -117,19 +121,38 @@ enum ProcessTools {
         for c in candidates where FileManager.default.isExecutableFile(atPath: c) {
             return c
         }
+        // A Finder-launched app inherits a minimal PATH, so fall back to the
+        // user's login shell. Try a plain login shell first (fast); then an
+        // interactive one, which sources the rc files (e.g. ~/.zshrc) where
+        // version managers — nvm, fnm, Volta, asdf — put node/claude on PATH.
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        for flags in [["-l", "-c"], ["-i", "-l", "-c"]] {
+            if let path = shellLookup(shell: shell, flags: flags, name: name) {
+                return path
+            }
+        }
+        return nil
+    }
+
+    private static func shellLookup(shell: String, flags: [String], name: String) -> String? {
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        p.arguments = ["-lc", "command -v \(name)"]
+        p.executableURL = URL(fileURLWithPath: shell)
+        p.arguments = flags + ["command -v \(name)"]
         let out = Pipe()
         p.standardOutput = out
         p.standardError = Pipe()
-        try? p.run()
+        p.standardInput = FileHandle.nullDevice  // never block on stdin
+        do { try p.run() } catch { return nil }
         p.waitUntilExit()
         let data = out.fileHandleForReading.readDataToEndOfFile()
-        let path = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if let path, !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
-            return path
+        let text = String(data: data, encoding: .utf8) ?? ""
+        // An interactive shell may print rc banners, so scan lines (newest last)
+        // for one that resolves to a real executable.
+        for line in text.split(separator: "\n").reversed() {
+            let path = line.trimmingCharacters(in: .whitespaces)
+            if !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
         }
         return nil
     }
