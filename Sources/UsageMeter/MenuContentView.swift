@@ -51,6 +51,7 @@ struct MenuContentView: View {
         }
         .padding(14)
         .frame(width: 280)
+        .background(VisualEffectBackground().ignoresSafeArea())
         .onAppear {
             launchAtLogin = LoginItem.isEnabled
             // Opening the menu only refetches when the data has gone stale; a
