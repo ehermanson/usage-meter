@@ -6,17 +6,17 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header
-
-            if store.providers.isEmpty && store.isLoading {
+            if store.providers.isEmpty {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Loading…").foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 8)
+            } else if store.visibleProviders.isEmpty {
+                noProvidersDetected
             } else {
-                ForEach(store.providers) { provider in
-                    if provider.id != store.providers.first?.id {
+                ForEach(store.visibleProviders) { provider in
+                    if provider.id != store.visibleProviders.first?.id {
                         Divider().opacity(0.5)
                     }
                     let style = store.style(for: provider.name)
@@ -30,7 +30,11 @@ struct MenuContentView: View {
 
             Divider()
 
-            menuBarPicker
+            // The picker only matters when there's a choice of provider to pin;
+            // with a single source it always resolves to that one, so hide it.
+            if store.selectableProviders.count > 1 {
+                menuBarPicker
+            }
 
             Toggle("Compact (5hr only)", isOn: $store.compactMenuBar)
                 .toggleStyle(.checkbox)
@@ -62,15 +66,20 @@ struct MenuContentView: View {
         }
     }
 
-    private var header: some View {
-        HStack {
-            Text("Usage Limits")
-                .font(.system(size: 13, weight: .semibold))
-            Spacer()
-            if store.isLoading {
-                ProgressView().controlSize(.mini)
-            }
+    // Shown when none of the supported tools are installed on this machine — the
+    // app has nothing to track. A calm note rather than an error or install nudge.
+    private var noProvidersDetected: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("No usage to show")
+                .font(.system(size: 12, weight: .semibold))
+            Text(
+                "Usage Meter tracks your limits once Claude Code, Codex, or Gemini is set up on this Mac."
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.vertical, 4)
     }
 
     private var menuBarPicker: some View {
@@ -100,10 +109,13 @@ struct MenuContentView: View {
         HStack(spacing: 8) {
             updatedLabel
 
-            Button("Refresh", systemImage: "arrow.clockwise", action: refreshNow)
-                .labelStyle(.iconOnly)
-                .disabled(store.isLoading)
-                .help("Refresh now")
+            if store.isLoading {
+                ProgressView().controlSize(.mini)
+            } else {
+                Button("Refresh", systemImage: "arrow.clockwise", action: refreshNow)
+                    .labelStyle(.iconOnly)
+                    .help("Refresh now")
+            }
 
             Spacer()
 

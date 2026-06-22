@@ -73,4 +73,27 @@ struct ModelTests {
         #expect(failed.retryable)
         #expect(failed.plan == "Pro")
     }
+
+    @Test("detected defaults true; notDetected hides the section")
+    func detectionFlag() {
+        #expect(ProviderUsage.ok("Claude", pools: []).detected)
+        #expect(ProviderUsage.failed("Codex", "boom").detected)
+        #expect(ProviderUsage.needsSetup("Gemini", "sign in").detected)
+
+        let absent = ProviderUsage.notDetected("Codex")
+        #expect(!absent.detected)
+        #expect(!absent.hasWindows)
+        #expect(absent.error == nil)
+        #expect(absent.setup == nil)
+    }
+
+    @Test("detection is not persisted; decoded snapshots are always detected")
+    func detectionNotEncoded() throws {
+        let decoded = try JSONDecoder().decode(
+            ProviderUsage.self,
+            from: try JSONEncoder().encode(ProviderUsage.notDetected("Codex")))
+        // detected is excluded from CodingKeys, so it never round-trips and a
+        // decoded snapshot defaults back to true (only windowed rows are cached).
+        #expect(decoded.detected)
+    }
 }

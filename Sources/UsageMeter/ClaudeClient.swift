@@ -8,6 +8,13 @@ import Foundation
 /// so there's no keychain parsing or token-expiry handling here.
 enum ClaudeClient {
     static func fetch() async -> ProviderUsage {
+        // The Agent SDK needs a Claude Code binary to drive; the app reuses the
+        // user's own install (passed to the helper via the env) rather than
+        // bundling one. If it isn't installed, the user doesn't use Claude Code,
+        // so hide the section entirely rather than nudge them to install it.
+        guard let claude = ProcessTools.findClaude() else {
+            return .notDetected("Claude")
+        }
         guard let node = ProcessTools.findNode() else {
             return .needsSetup(
                 "Claude", "Node.js is required to read Claude usage.",
@@ -15,14 +22,6 @@ enum ClaudeClient {
         }
         guard let helper = findHelper() else {
             return .failed("Claude", "Claude helper missing from the app bundle")
-        }
-        // The Agent SDK needs a Claude Code binary to drive; the app reuses the
-        // user's own install (passed to the helper via the env) rather than
-        // bundling one. A missing install is a calm "set up" state, like above.
-        guard let claude = ProcessTools.findClaude() else {
-            return .needsSetup(
-                "Claude", "Claude Code isn't installed or set up.",
-                url: SetupDetection.claudeCodeURL)
         }
 
         let result: ProcessTools.Result

@@ -8,8 +8,9 @@ import Foundation
 enum CodexClient {
     static func fetch() async -> ProviderUsage {
         guard let codex = findCodex() else {
-            return .needsSetup(
-                "Codex", "The Codex CLI isn't installed.", url: SetupDetection.codexURL)
+            // The Codex CLI isn't installed — the user doesn't use Codex, so hide
+            // the section entirely instead of nudging them to install it.
+            return .notDetected("Codex")
         }
         do {
             let result = try await exchange(codexPath: codex)

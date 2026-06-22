@@ -37,14 +37,23 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
     var id: String { name }  // one section per provider
     let name: String  // "Claude", "Codex"
     var pools: [UsagePool]
-    var error: String?
-    var plan: String?  // "Max", "Pro", "Pro Lite", …
+    var error: String? = nil
+    var plan: String? = nil  // "Max", "Pro", "Pro Lite", …
     /// A soft, retryable failure (e.g. usage endpoint momentarily throttled) —
     /// the store keeps showing the last good values when this is set.
     var retryable: Bool = false
     /// Set when the provider needs user setup (tool not installed / not signed
     /// in). Rendered as a calm hint rather than an error when there are no windows.
     var setup: SetupHint? = nil
+    /// False when the provider's CLI/credentials weren't found on this machine at
+    /// all — the user doesn't use this tool, so its section is hidden entirely
+    /// (no nudge to install something they didn't ask for). Not persisted: only
+    /// successful, windowed snapshots are cached, and those are always detected.
+    var detected: Bool = true
+
+    private enum CodingKeys: String, CodingKey {
+        case name, pools, error, plan, retryable, setup
+    }
 
     var allWindows: [UsageWindow] { pools.flatMap { $0.windows } }
 
@@ -84,6 +93,13 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
         ProviderUsage(
             name: name, pools: [], error: nil, plan: plan, retryable: false,
             setup: SetupHint(message: message, url: url))
+    }
+
+    /// The provider's CLI/credentials aren't present on this machine at all, so
+    /// the user doesn't use it. The section is hidden rather than shown with an
+    /// install nudge — being a single-provider user is a fully supported state.
+    static func notDetected(_ name: String) -> ProviderUsage {
+        ProviderUsage(name: name, pools: [], detected: false)
     }
 }
 

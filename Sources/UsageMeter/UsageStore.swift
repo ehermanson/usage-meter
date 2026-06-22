@@ -10,6 +10,11 @@ final class UsageStore {
     var isLoading = false
     var lastUpdated: Date?
 
+    /// The sections actually shown: providers whose CLI/credentials were found on
+    /// this machine. A tool the user doesn't have installed is hidden entirely —
+    /// using the app with a single provider is a fully supported state.
+    var visibleProviders: [ProviderUsage] { providers.filter { $0.detected } }
+
     /// Which provider is pinned to the menu-bar title; nil = Auto (highest 5h).
     var pinnedProvider: String? = UserDefaults.standard.string(forKey: "pinnedProvider") {
         didSet { UserDefaults.standard.set(pinnedProvider, forKey: "pinnedProvider") }

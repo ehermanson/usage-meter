@@ -44,6 +44,9 @@ enum GeminiClient {
             let buckets = try await retrieveQuota(token: token, project: project)
             return parse(buckets)
         } catch let error as GeminiError {
+            if error.notDetected {
+                return .notDetected(providerName)
+            }
             if error.setupNeeded {
                 return .needsSetup(providerName, error.message)
             }
@@ -195,9 +198,11 @@ enum GeminiClient {
             -> (value: String, expiry: Date)
     ) async throws -> (value: String, expiry: Date) {
         guard !candidates.isEmpty else {
+            // No credentials from any sign-in tool means Gemini isn't set up on
+            // this machine — the user doesn't use it, so hide the section.
             throw GeminiError(
-                "Sign in with Antigravity or the Gemini CLI to track usage.",
-                retryable: false, setupNeeded: true)
+                "Gemini isn't set up on this machine.",
+                retryable: false, notDetected: true)
         }
         var lastError: Error?
         for creds in candidates {
@@ -303,13 +308,20 @@ enum GeminiClient {
     private struct GeminiError: Error {
         let message: String
         let retryable: Bool
-        /// True when the failure is a fixable setup state (no credentials from any
-        /// sign-in tool) rather than a transient API error.
+        /// True when the failure is a fixable setup state (e.g. an expired sign-in)
+        /// rather than a transient API error — shown as a calm hint.
         let setupNeeded: Bool
-        init(_ message: String, retryable: Bool = true, setupNeeded: Bool = false) {
+        /// True when no credentials were found at all: Gemini isn't set up on this
+        /// machine, so its section is hidden rather than shown with a hint.
+        let notDetected: Bool
+        init(
+            _ message: String, retryable: Bool = true, setupNeeded: Bool = false,
+            notDetected: Bool = false
+        ) {
             self.message = message
             self.retryable = retryable
             self.setupNeeded = setupNeeded
+            self.notDetected = notDetected
         }
     }
 
