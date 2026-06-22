@@ -24,6 +24,25 @@ Two display options live in the dropdown: **Compact (5hr only)** trims the
 menu-bar title to just the 5-hour window, and **Show % remaining** flips every
 window (and the bar) from usage consumed to headroom left.
 
+## Install
+
+1. Download **`UsageMeter.dmg`** from the
+   [latest release](https://github.com/ehermanson/usage-meter/releases/latest).
+2. Open the DMG and drag **Usage Meter** into **Applications**.
+3. Launch it from Applications. It lives in the menu bar (no Dock icon); click the
+   gauge to open the panel.
+
+The app is signed and notarized by Apple, so it opens without security warnings.
+macOS 14 (Sonoma) or later.
+
+**Prerequisites for the numbers to show up:** Usage Meter reads usage from tools
+you already have, so it only reports for providers that are installed and signed
+in on your Mac — [Node.js](https://nodejs.org) (for Claude), the
+[Codex CLI](https://github.com/openai/codex), and a Gemini sign-in (Antigravity
+or the Gemini CLI). Any provider that isn't set up shows a calm hint with a
+**Set up ↗** link instead of a number, and starts reporting on its own once you
+install or sign in.
+
 ## Where the numbers come from
 
 - **Claude** — the **same path Relay uses**: the Claude Agent SDK's experimental
