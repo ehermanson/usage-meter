@@ -44,6 +44,10 @@ final class UsageStore {
         var lastAttempt: Date?
         var failureStreak = 0
         var lastGood: ProviderUsage?
+        /// The last value actually shown for this provider (any state, including
+        /// `.notDetected`). Reused for a provider that isn't due this pass so an
+        /// undetected/hidden provider doesn't flash a placeholder row.
+        var lastResolved: ProviderUsage?
     }
     private var states: [String: ProviderState] = [:]
 
@@ -237,14 +241,17 @@ final class UsageStore {
         for provider in registry {
             let name = provider.name
             guard let task = tasks[name] else {
-                resolved.append(
-                    states[name]?.lastGood ?? .failed(name, "Updating…", retryable: true))
+                // Not due this pass — reuse whatever was last shown (which may be
+                // `.notDetected`, i.e. hidden) rather than a fabricated placeholder.
+                resolved.append(states[name]?.lastResolved ?? .notDetected(name))
                 continue
             }
             let fresh = await task.value
             states[name, default: .init()].failureStreak =
                 fresh.allWindows.isEmpty ? (states[name]?.failureStreak ?? 0) + 1 : 0
-            resolved.append(resolve(fresh, name: name))
+            let resolvedValue = resolve(fresh, name: name)
+            states[name, default: .init()].lastResolved = resolvedValue
+            resolved.append(resolvedValue)
         }
 
         providers = resolved
