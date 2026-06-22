@@ -107,6 +107,32 @@ The app is **not** sandboxed (it spawns the `node`/`codex` CLIs and reads
 Gemini's Keychain item), so it ships as a direct download rather than via the
 Mac App Store.
 
+### Automated releases
+
+Pushing a `v*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml),
+which builds, signs, notarizes, staples, and attaches `UsageMeter.dmg` + `.zip`
+to a GitHub Release — no local steps:
+
+```sh
+git tag v1.2.0 && git push origin v1.2.0
+```
+
+This needs these repo secrets (one-time, **Settings → Secrets and variables →
+Actions**, or `gh secret set`):
+
+| Secret | What it is |
+| --- | --- |
+| `MACOS_CERT_P12` | base64 of your exported "Developer ID Application" `.p12` |
+| `MACOS_CERT_PASSWORD` | the password set when exporting that `.p12` |
+| `KEYCHAIN_PASSWORD` | any random string (throwaway CI keychain) |
+| `CODESIGN_IDENTITY` | e.g. `Developer ID Application: Your Name (TEAMID)` |
+| `APPLE_ID` | Apple ID email used for notarization |
+| `APPLE_TEAM_ID` | 10-char team id |
+| `APPLE_APP_PASSWORD` | app-specific password from appleid.apple.com |
+
+Export the certificate once via **Keychain Access → your "Developer ID
+Application" key → Export → `.p12`**, then `base64 -i cert.p12 | pbcopy`.
+
 ### Debug the data path without the UI
 
 ```sh
