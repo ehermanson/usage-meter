@@ -95,7 +95,8 @@ struct ProviderRow: View {
 
     private static func logo(named resource: String) -> NSImage? {
         if let cached = logoCache[resource] { return cached }
-        guard let url = Bundle.module.url(forResource: resource, withExtension: "png"),
+        guard let bundle = resourceBundle,
+            let url = bundle.url(forResource: resource, withExtension: "png"),
             let image = NSImage(contentsOf: url)
         else { return nil }
         image.isTemplate = true
@@ -104,4 +105,29 @@ struct ProviderRow: View {
     }
 
     private static var logoCache: [String: NSImage] = [:]
+
+    /// Locates the SwiftPM resource bundle ourselves instead of using the
+    /// generated `Bundle.module`, which looks for the bundle at the `.app` root
+    /// and otherwise `fatalError`s against a build-machine path baked in at
+    /// compile time — crashing every installed copy. In a packaged app the
+    /// bundle sits in `Contents/Resources`; in dev it's next to the executable.
+    private static let resourceBundle: Bundle? = {
+        let name = "UsageMeter_UsageMeter.bundle"
+        let bases = [
+            Bundle.main.resourceURL,
+            Bundle.main.bundleURL,
+            Bundle(for: BundleToken.self).resourceURL,
+            Bundle(for: BundleToken.self).bundleURL,
+        ]
+        for base in bases {
+            if let url = base?.appendingPathComponent(name),
+                let bundle = Bundle(url: url)
+            {
+                return bundle
+            }
+        }
+        return nil
+    }()
 }
+
+private final class BundleToken {}
