@@ -16,6 +16,14 @@ enum ClaudeClient {
         guard let helper = findHelper() else {
             return .failed("Claude", "Claude helper missing from the app bundle")
         }
+        // The Agent SDK needs a Claude Code binary to drive; the app reuses the
+        // user's own install (passed to the helper via the env) rather than
+        // bundling one. A missing install is a calm "set up" state, like above.
+        guard let claude = ProcessTools.findClaude() else {
+            return .needsSetup(
+                "Claude", "Claude Code isn't installed or set up.",
+                url: SetupDetection.claudeCodeURL)
+        }
 
         let result: ProcessTools.Result
         do {
@@ -23,6 +31,7 @@ enum ClaudeClient {
                 executable: node,
                 arguments: [helper.path],
                 cwd: helper.deletingLastPathComponent(),
+                extraEnv: ["USAGE_METER_CLAUDE_BIN": claude],
                 timeout: 40
             )
         } catch {

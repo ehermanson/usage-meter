@@ -38,9 +38,47 @@ async function resolveStartup() {
   }
 }
 
+// The SDK needs the path to a Claude Code binary. The Swift app finds the user's
+// install (via login-shell PATH) and passes it in USAGE_METER_CLAUDE_BIN; when the
+// helper is run directly during development we fall back to a small PATH probe.
+import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+function resolveClaudeBin() {
+  const fromEnv = process.env.USAGE_METER_CLAUDE_BIN;
+  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+
+  const candidates = [
+    join(homedir(), ".local/bin/claude"),
+    "/opt/homebrew/bin/claude",
+    "/usr/local/bin/claude",
+    join(homedir(), ".claude/local/claude"),
+  ];
+  for (const c of candidates) if (existsSync(c)) return c;
+
+  try {
+    const found = execFileSync("/bin/sh", ["-lc", "command -v claude"], {
+      encoding: "utf8",
+    }).trim();
+    if (found && existsSync(found)) return found;
+  } catch {
+    /* not on PATH */
+  }
+  return null;
+}
+
 async function main() {
   const startup = await resolveStartup();
-  const warm = await startup({ initializeTimeoutMs: 30_000 });
+  const pathToClaudeCodeExecutable = resolveClaudeBin();
+  if (!pathToClaudeCodeExecutable) {
+    return fail("Claude Code executable not found", "claude_not_found");
+  }
+  const warm = await startup({
+    options: { pathToClaudeCodeExecutable },
+    initializeTimeoutMs: 30_000,
+  });
 
   // A prompt iterable that never yields keeps the query handle open long enough
   // to issue the usage control request, exactly like Relay's PromptQueue.

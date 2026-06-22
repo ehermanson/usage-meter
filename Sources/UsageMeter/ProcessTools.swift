@@ -22,6 +22,7 @@ enum ProcessTools {
         executable: String,
         arguments: [String],
         cwd: URL? = nil,
+        extraEnv: [String: String] = [:],
         timeout: TimeInterval = 40
     ) async throws -> Result {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Result, Error>) in
@@ -34,6 +35,7 @@ enum ProcessTools {
                 var env = ProcessInfo.processInfo.environment
                 let extra = "/opt/homebrew/bin:/usr/local/bin"
                 env["PATH"] = (env["PATH"].map { "\(extra):\($0)" }) ?? extra
+                for (k, v) in extraEnv { env[k] = v }
                 proc.environment = env
 
                 let outPipe = Pipe(), errPipe = Pipe()
@@ -95,6 +97,19 @@ enum ProcessTools {
                 "/opt/homebrew/bin/node",
                 "/usr/local/bin/node",
                 "\(NSHomeDirectory())/.local/bin/node",
+            ])
+    }
+
+    /// Locate the user's Claude Code native binary, which the Agent SDK drives
+    /// via `pathToClaudeCodeExecutable`.
+    static func findClaude() -> String? {
+        findExecutable(
+            "claude",
+            candidates: [
+                "\(NSHomeDirectory())/.local/bin/claude",
+                "/opt/homebrew/bin/claude",
+                "/usr/local/bin/claude",
+                "\(NSHomeDirectory())/.claude/local/claude",
             ])
     }
 

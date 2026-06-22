@@ -1,10 +1,12 @@
 #!/bin/bash
 # Builds UsageMeter.app — a menu-bar app showing Claude, Codex & Gemini usage.
 #
-# The resulting .app is self-contained: the Claude Node helper and its
-# node_modules are copied inside Contents/Resources/helpers, so the bundle keeps
-# working when moved or installed to /Applications (it still needs Node.js, the
-# codex CLI, and the relevant sign-ins present on the machine to read usage).
+# The resulting .app bundles the Claude Node helper and its node_modules inside
+# Contents/Resources/helpers, so it keeps working when moved or installed to
+# /Applications. It does not bundle Claude Code's native binary (the SDK's
+# platform package, hundreds of MB); the helper reuses the user's existing
+# Claude Code install at runtime. The bundle needs Node.js, Claude Code, the
+# codex CLI, and the relevant sign-ins present on the machine to read usage.
 #
 # Signing:
 #   - default: ad-hoc (`-`), fine for running locally;
@@ -53,9 +55,11 @@ done
 
 # --- Bundle the Claude Node helper (self-contained) --------------------------
 echo "==> Bundling Claude helper + node_modules ..."
+# --omit=optional skips the ~205 MB platform binary (claude-agent-sdk-<os>-<arch>);
+# the app reuses the user's own Claude Code install instead.
 if [ ! -d "helpers/node_modules" ]; then
     echo "    installing helper dependencies (npm ci)..."
-    (cd helpers && npm ci --omit=dev)
+    (cd helpers && npm ci --omit=dev --omit=optional)
 fi
 HELPER_DEST="${RES_DIR}/helpers"
 mkdir -p "${HELPER_DEST}"
@@ -63,6 +67,9 @@ cp helpers/claude-usage.mjs helpers/package.json "${HELPER_DEST}/"
 [ -f helpers/package-lock.json ] && cp helpers/package-lock.json "${HELPER_DEST}/"
 # -c uses clonefile on APFS, so copying node_modules is cheap.
 cp -Rc helpers/node_modules "${HELPER_DEST}/node_modules"
+# Drop the SDK's native binaries (large, and unused since the helper drives the
+# user's own Claude Code) in case a dev installed node_modules without --omit=optional.
+rm -rf "${HELPER_DEST}"/node_modules/@anthropic-ai/claude-agent-sdk-*
 
 cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

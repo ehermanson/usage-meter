@@ -28,10 +28,11 @@ The menu-bar title shows the highest 5-hour usage across all providers. Bars tur
 1. Download **`UsageMeter.dmg`** from the [latest release](https://github.com/ehermanson/usage-meter/releases/latest).
 2. Open it, drag **Usage Meter** into **Applications**, and launch it from there.
 
-It reads usage from tools you already have — [Node.js](https://nodejs.org)
-(Claude), the [Codex CLI](https://github.com/openai/codex), and a Gemini sign-in
-(Antigravity or the Gemini CLI). Any provider that isn't set up shows a
-**Set up ↗** hint until you install or sign in.
+It reads usage from tools you already have — [Node.js](https://nodejs.org) and
+[Claude Code](https://docs.claude.com/en/docs/claude-code/setup) (Claude), the
+[Codex CLI](https://github.com/openai/codex), and a Gemini sign-in (Antigravity
+or the Gemini CLI). Any provider that isn't set up shows a **Set up ↗** hint
+until you install or sign in.
 
 ## Develop
 
