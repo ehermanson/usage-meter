@@ -13,7 +13,7 @@ concurrency:
 jobs:
   swift:
     name: Build & lint (Swift)
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
 
