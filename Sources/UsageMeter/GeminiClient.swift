@@ -23,10 +23,12 @@ enum GeminiClient {
     private enum OAuthClient {
         static let antigravity = (
             id: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
-            secret: "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")
+            secret: "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"
+        )
         static let geminiCLI = (
             id: "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com",
-            secret: "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")
+            secret: "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"
+        )
     }
 
     // Cached for the app's lifetime to avoid a Keychain read / refresh on every
@@ -64,7 +66,8 @@ enum GeminiClient {
         for bucket in buckets {
             guard let fraction = num(bucket["remainingFraction"]) else { continue }
             guard let reset = isoDate(bucket["resetTime"] as? String),
-                  reset.timeIntervalSinceNow > 0 else { continue }  // skip locked/epoch
+                reset.timeIntervalSinceNow > 0
+            else { continue }  // skip locked/epoch
             available = true
             maxUsed = max(maxUsed, (1 - fraction) * 100)
             if soonestReset == nil || reset < soonestReset! { soonestReset = reset }
@@ -88,8 +91,9 @@ enum GeminiClient {
             cachedProject = saved
             return saved
         }
-        let json = try await post("loadCodeAssist", token: token,
-                                  body: ["metadata": ["pluginType": "GEMINI"]])
+        let json = try await post(
+            "loadCodeAssist", token: token,
+            body: ["metadata": ["pluginType": "GEMINI"]])
         guard let project = json["cloudaicompanionProject"] as? String, !project.isEmpty else {
             throw GeminiError("No Code Assist project for this account")
         }
@@ -98,7 +102,9 @@ enum GeminiClient {
         return project
     }
 
-    private static func retrieveQuota(token: String, project: String) async throws -> [[String: Any]] {
+    private static func retrieveQuota(
+        token: String, project: String
+    ) async throws -> [[String: Any]] {
         do {
             let json = try await post("retrieveUserQuota", token: token, body: ["project": project])
             return json["buckets"] as? [[String: Any]] ?? []
@@ -117,8 +123,10 @@ enum GeminiClient {
         UserDefaults.standard.removeObject(forKey: projectKey)
     }
 
-    private static func post(_ method: String, token: String,
-                             body: [String: Any]) async throws -> [String: Any] {
+    private static func post(
+        _ method: String, token: String,
+        body: [String: Any]
+    ) async throws -> [String: Any] {
         guard let url = URL(string: "\(base):\(method)") else {
             throw GeminiError("Bad Gemini URL", retryable: false)
         }
@@ -135,8 +143,9 @@ enum GeminiClient {
             if code == 401 { cachedToken = nil }  // force a refresh next time
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
                 .flatMap { ($0["error"] as? [String: Any])?["message"] as? String }
-            throw GeminiError(message ?? "Gemini API error \(code)",
-                              retryable: code == 401 || code >= 500)
+            throw GeminiError(
+                message ?? "Gemini API error \(code)",
+                retryable: code == 401 || code >= 500)
         }
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
@@ -210,8 +219,10 @@ enum GeminiClient {
         throw lastError ?? GeminiError("Gemini authentication failed")
     }
 
-    private static func refresh(token refreshToken: String, clientID: String,
-                                clientSecret: String) async throws -> (value: String, expiry: Date) {
+    private static func refresh(
+        token refreshToken: String, clientID: String,
+        clientSecret: String
+    ) async throws -> (value: String, expiry: Date) {
         var request = URLRequest(url: URL(string: tokenURL)!)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -224,8 +235,9 @@ enum GeminiClient {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let access = json["access_token"] as? String else {
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let access = json["access_token"] as? String
+        else {
             throw GeminiError("Gemini token refresh failed")
         }
         let expiresIn = num(json["expires_in"]) ?? 3600
@@ -246,14 +258,16 @@ enum GeminiClient {
         ]
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data,
-              var string = String(data: data, encoding: .utf8) else { return nil }
+            let data = item as? Data,
+            var string = String(data: data, encoding: .utf8)
+        else { return nil }
         let prefix = "go-keyring-base64:"
         if string.hasPrefix(prefix) { string.removeFirst(prefix.count) }
         guard let decoded = Data(base64Encoded: string),
-              let json = try? JSONSerialization.jsonObject(with: decoded) as? [String: Any],
-              let token = json["token"] as? [String: Any],
-              let access = token["access_token"] as? String else { return nil }
+            let json = try? JSONSerialization.jsonObject(with: decoded) as? [String: Any],
+            let token = json["token"] as? [String: Any],
+            let access = token["access_token"] as? String
+        else { return nil }
         return Credentials(
             accessToken: access,
             refreshToken: token["refresh_token"] as? String,
@@ -267,8 +281,9 @@ enum GeminiClient {
     private static func geminiCLICredentials() -> Credentials? {
         let path = "\(NSHomeDirectory())/.gemini/oauth_creds.json"
         guard let data = FileManager.default.contents(atPath: path),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let access = json["access_token"] as? String else { return nil }
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let access = json["access_token"] as? String
+        else { return nil }
         var expiry: Date?
         if let ms = num(json["expiry_date"]) {
             expiry = Date(timeIntervalSince1970: ms / 1000)

@@ -15,10 +15,14 @@ struct GeminiParseTests {
     @Test("collapses available buckets into one Daily window at the highest usage")
     func collapsesToDaily() {
         let buckets: [[String: Any]] = [
-            ["modelId": "gemini-2.5-flash", "remainingFraction": 1.0,
-             "resetTime": reset(hoursFromNow: 20)],
-            ["modelId": "gemini-3-flash-preview", "remainingFraction": 0.25,
-             "resetTime": reset(hoursFromNow: 24)],
+            [
+                "modelId": "gemini-2.5-flash", "remainingFraction": 1.0,
+                "resetTime": reset(hoursFromNow: 20),
+            ],
+            [
+                "modelId": "gemini-3-flash-preview", "remainingFraction": 0.25,
+                "resetTime": reset(hoursFromNow: 24),
+            ],
         ]
         let usage = GeminiClient.parse(buckets)
 
@@ -34,10 +38,14 @@ struct GeminiParseTests {
     @Test("locked tier models (epoch reset) are skipped")
     func skipsLockedModels() {
         let buckets: [[String: Any]] = [
-            ["modelId": "gemini-2.5-flash", "remainingFraction": 1.0,
-             "resetTime": reset(hoursFromNow: 12)],
-            ["modelId": "gemini-3-pro-preview", "remainingFraction": 0.0,
-             "resetTime": "1970-01-01T00:00:00Z"],
+            [
+                "modelId": "gemini-2.5-flash", "remainingFraction": 1.0,
+                "resetTime": reset(hoursFromNow: 12),
+            ],
+            [
+                "modelId": "gemini-3-pro-preview", "remainingFraction": 0.0,
+                "resetTime": "1970-01-01T00:00:00Z",
+            ],
         ]
         let usage = GeminiClient.parse(buckets)
 
@@ -48,8 +56,10 @@ struct GeminiParseTests {
     @Test("no available buckets yields a retryable failure")
     func noAvailableFails() {
         let buckets: [[String: Any]] = [
-            ["modelId": "gemini-3-pro-preview", "remainingFraction": 0.0,
-             "resetTime": "1970-01-01T00:00:00Z"]
+            [
+                "modelId": "gemini-3-pro-preview", "remainingFraction": 0.0,
+                "resetTime": "1970-01-01T00:00:00Z",
+            ]
         ]
         let usage = GeminiClient.parse(buckets)
         #expect(usage.error != nil)
@@ -72,7 +82,9 @@ struct GeminiCredentialTests {
     }
 
     /// A refresh stub that fails unless the credential is in `succeedFor`.
-    private func refresher(succeedFor: Set<String> = []) -> (Creds, String) async throws -> (value: String, expiry: Date) {
+    private func refresher(
+        succeedFor: Set<String> = []
+    ) -> (Creds, String) async throws -> (value: String, expiry: Date) {
         { c, _ in
             guard succeedFor.contains(c.accessToken) else {
                 struct Boom: Error {}

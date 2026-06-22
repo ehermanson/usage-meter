@@ -232,7 +232,8 @@ final class UsageStore {
         for provider in registry {
             let name = provider.name
             guard let task = tasks[name] else {
-                resolved.append(states[name]?.lastGood ?? .failed(name, "Updating…", retryable: true))
+                resolved.append(
+                    states[name]?.lastGood ?? .failed(name, "Updating…", retryable: true))
                 continue
             }
             let fresh = await task.value
