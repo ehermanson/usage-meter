@@ -7,7 +7,8 @@ import SwiftUI
 ///
 /// On macOS 26, only `NSGlassEffectView` actually composites translucently in a
 /// MenuBarExtra window — `NSVisualEffectView`'s behind-window blur renders opaque
-/// here. Its `.clear` style is the see-through variant (`.regular` is frosted).
+/// here. We use its frosted `.regular` style so content stays legible over dark
+/// windows (`.clear` is more see-through but washes out on dark backgrounds).
 ///
 /// Two non-obvious requirements:
 ///   * The glass must be the window's *root* content view (a child view always
@@ -46,7 +47,10 @@ struct VisualEffectBackground: NSViewRepresentable {
         let glass: NSView
         if #available(macOS 26.0, *) {
             let view = NSGlassEffectView()
-            view.style = .clear
+            // .regular (frosted) rather than .clear: the frost keeps content
+            // legible over dark windows, the way native menus do. .clear is too
+            // see-through and washes out on dark backgrounds.
+            view.style = .regular
             view.frame = hosting.frame
             view.autoresizingMask = [.width, .height]
             view.contentView = hosting
