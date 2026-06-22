@@ -3,7 +3,6 @@
 [![CI](https://github.com/ehermanson/usage-meter/actions/workflows/ci.yml/badge.svg)](https://github.com/ehermanson/usage-meter/actions/workflows/ci.yml)
 [![Release](https://github.com/ehermanson/usage-meter/actions/workflows/release.yml/badge.svg)](https://github.com/ehermanson/usage-meter/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/ehermanson/usage-meter)](https://github.com/ehermanson/usage-meter/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/ehermanson/usage-meter/total)](https://github.com/ehermanson/usage-meter/releases)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue)
 [![License: MIT](https://img.shields.io/github/license/ehermanson/usage-meter)](LICENSE)
 
