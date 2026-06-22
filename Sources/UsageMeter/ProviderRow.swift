@@ -17,7 +17,11 @@ struct ProviderRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+            // Center the logo, name, and plan badge on a shared optical midline.
+            // A plain `.center` HStack aligns frame centers, and the badge's
+            // capsule padding leaves it sitting visibly low next to the name;
+            // `.rowMid` lines up the text's cap-height center instead.
+            HStack(alignment: .rowMid, spacing: 6) {
                 if let logo = logoImage {
                     Image(nsImage: logo)
                         .renderingMode(.template)
@@ -25,11 +29,13 @@ struct ProviderRow: View {
                         .scaledToFit()
                         .frame(width: logoSize, height: logoSize)
                         .foregroundStyle(.primary)
+                        .alignmentGuide(.rowMid) { $0.height / 2 }
                         .accessibilityHidden(true)
                 } else {
                     Circle()
                         .fill(accent)
                         .frame(width: 7, height: 7)
+                        .alignmentGuide(.rowMid) { $0.height / 2 }
                         .accessibilityHidden(true)
                 }
                 Text(provider.name)
@@ -131,3 +137,15 @@ struct ProviderRow: View {
 }
 
 private final class BundleToken {}
+
+private extension VerticalAlignment {
+    /// Aligns on a single line of text's optical (cap-height) center rather than
+    /// its frame center, so a capsule-padded badge sits level with the name.
+    enum RowMid: AlignmentID {
+        static func defaultValue(in d: ViewDimensions) -> CGFloat {
+            d[.firstTextBaseline] * 0.66
+        }
+    }
+
+    static let rowMid = VerticalAlignment(RowMid.self)
+}
