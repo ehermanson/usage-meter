@@ -61,7 +61,14 @@ if command -v create-dmg >/dev/null 2>&1; then
         --icon "${APP_NAME}.app" 140 180 \
         --window-size 600 360 \
         "${DMG_PATH}" "${APP_DIR}" >/dev/null
-    xcrun stapler staple "${DMG_PATH}" || true
+    # The DMG is a new container, so it must be notarized in its own right before
+    # it can be stapled (the stapled app inside isn't enough to staple the .dmg).
+    echo "==> Notarizing ${DMG_PATH}..."
+    xcrun notarytool submit "${DMG_PATH}" \
+        --keychain-profile "${NOTARY_PROFILE}" \
+        --wait
+    xcrun stapler staple "${DMG_PATH}"
+    xcrun stapler validate "${DMG_PATH}"
     echo "==> ${DMG_PATH} ready"
 else
     echo "==> (install create-dmg for a DMG: brew install create-dmg)"
