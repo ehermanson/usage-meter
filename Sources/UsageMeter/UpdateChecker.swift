@@ -49,7 +49,8 @@ final class UpdateChecker {
             }
 
             let dmg = release.assets.first { $0.name.hasSuffix(".dmg") }
-            let target = dmg.flatMap { URL(string: $0.browserDownloadURL) }
+            let target =
+                dmg.flatMap { URL(string: $0.browserDownloadURL) }
                 ?? URL(string: release.htmlURL)
             if let target {
                 availableUpdate = (version: latest, url: target)
