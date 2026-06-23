@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuContentView: View {
     @Bindable var store: UsageStore
     @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var updates = UpdateChecker.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -51,6 +52,11 @@ struct MenuContentView: View {
                     applyLaunchAtLogin(newValue)
                 }
 
+            if let update = updates.availableUpdate {
+                Divider()
+                updateRow(version: update.version)
+            }
+
             footer
         }
         .padding(14)
@@ -63,6 +69,7 @@ struct MenuContentView: View {
             if store.isStale {
                 Task { await store.refresh() }
             }
+            Task { await updates.check() }
         }
     }
 
@@ -103,6 +110,20 @@ struct MenuContentView: View {
         }
         .menuStyle(.borderlessButton)
         .controlSize(.small)
+    }
+
+    // Shown only when GitHub has a release newer than this build. Clicking opens
+    // the .dmg download — the lightweight update path (no in-place swap).
+    private func updateRow(version: String) -> some View {
+        Button {
+            updates.openDownload()
+        } label: {
+            Label("Update to v\(version)", systemImage: "arrow.down.circle")
+                .font(.system(size: 11, weight: .medium))
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .help("Download the latest Usage Meter from GitHub")
     }
 
     private var footer: some View {

@@ -5,6 +5,7 @@ struct UsageMeterApp: App {
 
     init() {
         Task { @MainActor in UsageStore.shared.startAutoRefresh() }
+        Task { @MainActor in await UpdateChecker.shared.check() }
     }
 
     var body: some Scene {
