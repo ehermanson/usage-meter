@@ -37,6 +37,14 @@ enum GeminiClient {
     private static var cachedProject: String?
     private static let projectKey = "geminiProject.v1"
 
+    // Our own Keychain item, where we copy the credentials we read from a sign-in
+    // tool. We own this item, so reading it never prompts and — unlike the tools'
+    // items, which their CLIs delete-and-recreate on every token refresh (which
+    // resets the access list and re-triggers the "allow access" prompt) — it stays
+    // trusted across refreshes. This is what stops the recurring Keychain prompt.
+    private static let ownService = Bundle.main.bundleIdentifier ?? "com.erichermanson.usagemeter"
+    private static let ownAccount = "gemini-oauth"
+
     static func fetch() async -> ProviderUsage {
         do {
             let token = try await accessToken()
@@ -177,12 +185,29 @@ enum GeminiClient {
         if let cachedToken, cachedToken.expiry.timeIntervalSinceNow > 120 {
             return cachedToken.value
         }
-        let candidates = sources.compactMap { $0() }
-        let token = try await selectToken(from: candidates, now: Date()) { creds, refreshToken in
+        let refresher: (Credentials, String) async throws -> (value: String, expiry: Date) = {
+            creds, refreshToken in
             try await refresh(
                 token: refreshToken, clientID: creds.clientID, clientSecret: creds.clientSecret)
         }
+        // Prefer the credentials we've copied into our own item: reading it
+        // doesn't prompt, so steady-state refreshes never touch a sign-in tool's
+        // Keychain item. Fall through only if our stored refresh token has been
+        // rejected (the user revoked access or re-signed-in elsewhere).
+        if let mine = ownCredentials() {
+            if let token = try? await selectToken(from: [mine], now: Date(), refresh: refresher) {
+                cachedToken = token
+                return token.value
+            }
+        }
+        let candidates = sources.compactMap { $0() }
+        let token = try await selectToken(from: candidates, now: Date(), refresh: refresher)
         cachedToken = token
+        // Copy the refresh token into our own item so the next refresh — and every
+        // one after — reads from there instead of re-prompting for the tool's item.
+        if let source = candidates.first(where: { $0.refreshToken != nil }) {
+            storeOwnCredentials(source, accessToken: token.value, expiry: token.expiry)
+        }
         return token.value
     }
 
@@ -279,6 +304,63 @@ enum GeminiClient {
             expiry: isoDate(token["expiry"] as? String),
             clientID: OAuthClient.antigravity.id,
             clientSecret: OAuthClient.antigravity.secret)
+    }
+
+    /// Reads the credentials we previously copied into our own Keychain item.
+    /// We created this item, so the read is implicitly trusted and never prompts.
+    private static func ownCredentials() -> Credentials? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: ownService,
+            kSecAttrAccount as String: ownAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+            let data = item as? Data,
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let refresh = json["refresh_token"] as? String,
+            let clientID = json["client_id"] as? String,
+            let clientSecret = json["client_secret"] as? String
+        else { return nil }
+        return Credentials(
+            accessToken: json["access_token"] as? String ?? "",
+            refreshToken: refresh,
+            expiry: isoDate(json["expiry"] as? String),
+            clientID: clientID,
+            clientSecret: clientSecret)
+    }
+
+    /// Upserts the given credentials (refresh token + issuing client, plus the
+    /// freshest access token) into our own Keychain item. Writing our own item
+    /// doesn't prompt, and `kSecAttrAccessibleAfterFirstUnlock` keeps it readable
+    /// for background refreshes while the screen is locked.
+    private static func storeOwnCredentials(
+        _ creds: Credentials, accessToken: String, expiry: Date
+    ) {
+        guard let refresh = creds.refreshToken,
+            let data = try? JSONSerialization.data(withJSONObject: [
+                "refresh_token": refresh,
+                "client_id": creds.clientID,
+                "client_secret": creds.clientSecret,
+                "access_token": accessToken,
+                "expiry": isoPlain.string(from: expiry),
+            ])
+        else { return }
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: ownService,
+            kSecAttrAccount as String: ownAccount,
+        ]
+        let status = SecItemUpdate(
+            base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var add = base
+            add[kSecValueData as String] = data
+            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            SecItemAdd(add as CFDictionary, nil)
+        }
     }
 
     /// Gemini CLI (@google/gemini-cli): plain JSON at `~/.gemini/oauth_creds.json`
