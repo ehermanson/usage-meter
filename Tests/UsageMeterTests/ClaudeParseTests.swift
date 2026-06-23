@@ -26,13 +26,17 @@ struct ClaudeParseTests {
         #expect(windows[1].resetAt != nil)
     }
 
-    @Test("unknown but window-shaped keys get a prettified label")
-    func parsesUnknownWindow() {
+    @Test("unknown codename windows are ignored, not shown as bogus rows")
+    func ignoresUnknownWindows() {
+        // Internal codenames (amber_ladder, tangelo, …) become window-shaped when
+        // active but aren't real user limits — only the allowlist should render.
         let limits: [String: Any] = [
-            "custom_thing": ["utilization": 7.0, "resets_at": "2026-06-18T20:00:00Z"]
+            "five_hour": ["utilization": 4.0, "resets_at": "2026-06-18T20:00:00Z"],
+            "amber_ladder": ["utilization": 0.0, "resets_at": "2026-09-02T06:59:59+00:00"],
+            "tangelo": ["utilization": 12.0, "resets_at": "2026-06-18T20:00:00Z"],
         ]
         let usage = ClaudeClient.parse(limits, plan: nil)
-        #expect(usage.allWindows.map(\.label) == ["Custom Thing"])
+        #expect(usage.allWindows.map(\.label) == ["5h"])
     }
 
     @Test("no window-shaped entries yields a retryable failure")

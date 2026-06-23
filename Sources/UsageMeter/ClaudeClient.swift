@@ -96,18 +96,15 @@ enum ClaudeClient {
     /// Exposed for tests. Maps a decoded `rate_limits` dict to provider usage.
     static func parse(_ limits: [String: Any], plan: String?) -> ProviderUsage {
         var windows: [UsageWindow] = []
-        var consumed = Set<String>()
 
-        // Known keys first, in a sensible order.
+        // Only known, user-facing windows. The payload also carries internal
+        // codenamed entries (amber_ladder, tangelo, omelette_promotional, …) that
+        // become window-shaped when active but aren't real limits — an allowlist
+        // keeps those from rendering as bogus rows.
         for (key, label) in knownLabels {
             if let w = window(limits[key], label: label) {
                 windows.append(w)
-                consumed.insert(key)
             }
-        }
-        // Any other window-shaped entries we don't have a label for.
-        for (key, value) in limits where !consumed.contains(key) {
-            if let w = window(value, label: prettyKey(key)) { windows.append(w) }
         }
 
         // Dollar-budget usage (Enterprise plans, or any plan with extra usage
@@ -161,10 +158,6 @@ enum ClaudeClient {
         let code = (dict["currency"] as? String) ?? "USD"
         let amount = minor / pow(10, Double(exponent))
         return amount.formatted(.currency(code: code).precision(.fractionLength(0)))
-    }
-
-    private static func prettyKey(_ key: String) -> String {
-        key.replacing("_", with: " ").capitalized
     }
 
     // Formatters are expensive to build, so reuse them across windows.
