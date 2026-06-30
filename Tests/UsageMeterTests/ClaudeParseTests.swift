@@ -48,7 +48,7 @@ struct ClaudeParseTests {
         #expect(!usage.hasWindows)
     }
 
-    @Test("enterprise dollar-budget usage surfaces as a Spend window with amounts")
+    @Test("enterprise dollar-budget usage surfaces as a Usage window with amounts")
     func parsesEnterpriseSpend() {
         // Enterprise reports all time windows null; the real signal is a monthly
         // dollar spend against a limit under `spend` (no resets_at).
@@ -67,7 +67,7 @@ struct ClaudeParseTests {
         let usage = ClaudeClient.parse(limits, plan: "Enterprise")
         #expect(usage.error == nil)
         let windows = usage.allWindows
-        #expect(windows.map(\.label) == ["Spend"])
+        #expect(windows.map(\.label) == ["Usage"])
         #expect(windows.first?.usedPercent == 79)
         #expect(windows.first?.resetAt == nil)
         #expect(windows.first?.detail == "$237 / $300")
