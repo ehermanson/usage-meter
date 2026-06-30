@@ -145,7 +145,7 @@ enum ClaudeClient {
         } else {
             detail = nil
         }
-        return UsageWindow(label: "Spend", usedPercent: percent, resetAt: nil, detail: detail)
+        return UsageWindow(label: "Usage", usedPercent: percent, resetAt: nil, detail: detail)
     }
 
     /// Formats a `{amount_minor, currency, exponent}` money object as a whole-unit

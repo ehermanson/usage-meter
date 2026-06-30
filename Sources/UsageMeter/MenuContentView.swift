@@ -37,9 +37,11 @@ struct MenuContentView: View {
                 menuBarPicker
             }
 
-            Toggle("Compact (5hr only)", isOn: $store.compactMenuBar)
-                .toggleStyle(.checkbox)
-                .font(.system(size: 11))
+            if store.compactMenuBarApplies {
+                Toggle("Compact (5hr only)", isOn: $store.compactMenuBar)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 11))
+            }
 
             Toggle("Show % remaining", isOn: $store.showRemaining)
                 .toggleStyle(.checkbox)

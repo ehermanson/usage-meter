@@ -175,6 +175,17 @@ final class UsageStore {
         return selectableProviders.count > 1 ? "\(p.name)  \(body)" : body
     }
 
+    /// Whether the "Compact" toggle does anything worth offering. It only drops
+    /// the weekly window from the menu-bar title, so it's meaningless for a
+    /// provider with no distinct 5h/weekly split — e.g. a fixed-budget Enterprise
+    /// plan that reports only a single "Usage" window. Hidden unless some shown
+    /// provider actually has a weekly window to collapse.
+    var compactMenuBarApplies: Bool {
+        providers.contains { p in
+            p.hasWindows && p.weekly != nil && p.weekly?.id != p.fiveHour?.id
+        }
+    }
+
     /// The percentage to show for a window, honoring the used/remaining setting.
     func displayPercent(_ window: UsageWindow) -> Double {
         showRemaining ? window.remainingPercent : window.usedPercent
