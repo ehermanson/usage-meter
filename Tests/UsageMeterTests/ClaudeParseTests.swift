@@ -49,8 +49,10 @@ struct ClaudeParseTests {
             "seven_day_opus": NSNull(),
             "seven_day_sonnet": NSNull(),
             "model_scoped": [
-                ["display_name": "Fable", "utilization": 10.0,
-                 "resets_at": "2026-07-06T10:00:00Z"]
+                [
+                    "display_name": "Fable", "utilization": 10.0,
+                    "resets_at": "2026-07-06T10:00:00Z",
+                ]
             ],
         ]
         let usage = ClaudeClient.parse(limits, plan: "Max")
@@ -68,8 +70,10 @@ struct ClaudeParseTests {
         let limits: [String: Any] = [
             "seven_day_opus": ["utilization": 20.0, "resets_at": "2026-07-06T10:00:00Z"],
             "model_scoped": [
-                ["display_name": "Opus", "utilization": 20.0,
-                 "resets_at": "2026-07-06T10:00:00Z"]
+                [
+                    "display_name": "Opus", "utilization": 20.0,
+                    "resets_at": "2026-07-06T10:00:00Z",
+                ]
             ],
         ]
         let usage = ClaudeClient.parse(limits, plan: "Max")
