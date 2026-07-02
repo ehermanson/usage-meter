@@ -39,6 +39,43 @@ struct ClaudeParseTests {
         #expect(usage.allWindows.map(\.label) == ["5h"])
     }
 
+    @Test("per-model weekly windows (model_scoped) surface as Weekly · <model>")
+    func parsesModelScopedWindows() {
+        // Per-model limits (e.g. Fable) arrive in a `model_scoped` array, separate
+        // from the null top-level seven_day_<model> keys.
+        let limits: [String: Any] = [
+            "five_hour": ["utilization": 29.0, "resets_at": "2026-07-02T17:50:00Z"],
+            "seven_day": ["utilization": 6.0, "resets_at": "2026-07-06T10:00:00Z"],
+            "seven_day_opus": NSNull(),
+            "seven_day_sonnet": NSNull(),
+            "model_scoped": [
+                ["display_name": "Fable", "utilization": 10.0,
+                 "resets_at": "2026-07-06T10:00:00Z"]
+            ],
+        ]
+        let usage = ClaudeClient.parse(limits, plan: "Max")
+        #expect(usage.error == nil)
+        #expect(usage.allWindows.map(\.label) == ["5h", "Weekly · all", "Weekly · Fable"])
+        let fable = usage.allWindows.first { $0.label == "Weekly · Fable" }
+        #expect(fable?.usedPercent == 10.0)
+        #expect(fable?.resetAt != nil)
+    }
+
+    @Test("model_scoped does not duplicate a known seven_day_<model> window")
+    func modelScopedDoesNotDuplicate() {
+        // If both a top-level seven_day_opus and a model_scoped "Opus" are present,
+        // only one "Weekly · Opus" row should render.
+        let limits: [String: Any] = [
+            "seven_day_opus": ["utilization": 20.0, "resets_at": "2026-07-06T10:00:00Z"],
+            "model_scoped": [
+                ["display_name": "Opus", "utilization": 20.0,
+                 "resets_at": "2026-07-06T10:00:00Z"]
+            ],
+        ]
+        let usage = ClaudeClient.parse(limits, plan: "Max")
+        #expect(usage.allWindows.map(\.label) == ["Weekly · Opus"])
+    }
+
     @Test("no window-shaped entries yields a retryable failure")
     func noWindowsFails() {
         let usage = ClaudeClient.parse(["limits": ["foo": 1]], plan: "Pro")

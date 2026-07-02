@@ -107,6 +107,15 @@ enum ClaudeClient {
             }
         }
 
+        // Per-model weekly limits arrive as a `model_scoped` array (e.g. Fable),
+        // separate from the null top-level `seven_day_<model>` keys — surface them
+        // generically so any current or future model shows without a code change.
+        // Skip any whose label a known window already produced, to avoid dupes.
+        for w in modelScopedWindows(limits["model_scoped"])
+        where !windows.contains(where: { $0.label == w.label }) {
+            windows.append(w)
+        }
+
         // Dollar-budget usage (Enterprise plans, or any plan with extra usage
         // enabled) reports no time windows — just a monthly spend against a limit.
         // Surface it so those users see something instead of "No usage windows".
@@ -130,6 +139,22 @@ enum ClaudeClient {
         return UsageWindow(
             label: label, usedPercent: util,
             resetAt: isoDate(dict["resets_at"] as? String))
+    }
+
+    /// Per-model weekly limits arrive as `model_scoped`: an array of
+    /// `{ display_name, utilization, resets_at }` (utilization 0-100). Each becomes
+    /// a "Weekly · <model>" window — e.g. Fable → "Weekly · Fable".
+    private static func modelScopedWindows(_ raw: Any?) -> [UsageWindow] {
+        guard let arr = raw as? [Any] else { return [] }
+        return arr.compactMap { entry in
+            guard let dict = entry as? [String: Any],
+                let name = (dict["display_name"] as? String), !name.isEmpty,
+                let util = (dict["utilization"] as? NSNumber)?.doubleValue
+            else { return nil }
+            return UsageWindow(
+                label: "Weekly · \(name)", usedPercent: util,
+                resetAt: isoDate(dict["resets_at"] as? String))
+        }
     }
 
     /// The `spend` entry is a monthly dollar budget (used vs limit), not a time
