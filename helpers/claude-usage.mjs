@@ -23,6 +23,16 @@ function fail(message, code, subscription) {
   process.exit(0);
 }
 
+// An out-of-date Claude Code CLI rejects the get_usage control request with
+// "Unsupported control request subtype: get_usage". Detect that (whether it
+// surfaces as a rejection or an error payload) and show something actionable
+// instead of leaking the raw protocol error.
+function failIfOutdatedCli(message) {
+  if (/unsupported control request subtype/i.test(message)) {
+    fail("Claude Code is out of date — update it to enable usage reporting", "unsupported");
+  }
+}
+
 // Hard watchdog so the helper can never hang the menu-bar app.
 const watchdog = setTimeout(() => fail("Timed out reading Claude usage", "timeout"), OVERALL_TIMEOUT_MS);
 
@@ -92,10 +102,18 @@ async function main() {
     if (typeof getUsage !== "function") {
       return fail("SDK too old: get_usage not available", "unsupported");
     }
-    const snap = await getUsage.call(handle);
+    let snap;
+    try {
+      snap = await getUsage.call(handle);
+    } catch (err) {
+      failIfOutdatedCli(String(err?.message ?? err ?? ""));
+      throw err;
+    }
 
     if (snap?.error) {
-      return fail(snap.error.message ?? "usage error", snap.error.type ?? "error");
+      const msg = String(snap.error.message ?? "usage error");
+      failIfOutdatedCli(msg);
+      return fail(msg, snap.error.type ?? "error");
     }
     const limits = snap?.rate_limits;
     const subscription = snap?.subscription_type ?? snap?.subscriptionType ?? null;
