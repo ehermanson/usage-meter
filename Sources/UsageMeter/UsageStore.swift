@@ -81,10 +81,19 @@ final class UsageStore {
         let defaults = UserDefaults.standard
         let encoder = JSONEncoder()
         for provider in registry {
-            guard let usage = states[provider.name]?.lastGood,
+            let key = PersistKey.lastGood(provider.name)
+            if let usage = states[provider.name]?.lastGood,
                 let data = try? encoder.encode(usage)
-            else { continue }
-            defaults.set(data, forKey: PersistKey.lastGood(provider.name))
+            {
+                defaults.set(data, forKey: key)
+            } else {
+                // `lastGood` was dropped by a hard failure (signed out, plan
+                // limits no longer apply). Remove the persisted copy too —
+                // otherwise the next launch re-seeds the stale numbers into the
+                // menu bar, and the first refresh wipes them again, an endless
+                // show-then-clear loop.
+                defaults.removeObject(forKey: key)
+            }
         }
         defaults.set(Date.now, forKey: PersistKey.updated)
     }

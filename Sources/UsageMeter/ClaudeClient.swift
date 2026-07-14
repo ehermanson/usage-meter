@@ -58,6 +58,16 @@ enum ClaudeClient {
             if code == "throttled" {
                 return .failed("Claude", msg, retryable: true, plan: plan)
             }
+            // rate_limits_available:false — plan limits don't apply to this
+            // session. `no_scope` (signed into a claude.ai plan, but the OAuth
+            // token predates the profile scope) is fixed by signing in again;
+            // `no_plan` (API key / Bedrock / Vertex) has no limits to show.
+            // Both are calm setup states, not red errors — keep the helper's
+            // specific message rather than a generic guess.
+            if code == "no_scope" || code == "no_plan" {
+                return .needsSetup(
+                    "Claude", msg + ".", url: SetupDetection.claudeCodeURL, plan: plan)
+            }
             // The SDK couldn't even start (Claude Code not installed) or reported
             // an auth failure — surface a calm, fixable hint instead of a red error.
             if SetupDetection.looksLikeMissingTool(msg) {

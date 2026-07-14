@@ -120,12 +120,26 @@ async function main() {
     if (!limits || typeof limits !== "object") {
       // rate_limits_available:true but rate_limits:null means the usage endpoint
       // is momentarily throttled — a soft, retryable state, not a hard failure.
-      const code = snap?.rate_limits_available ? "throttled" : "empty";
-      const msg =
-        code === "throttled"
-          ? "Usage temporarily throttled"
-          : "No rate-limit data in usage snapshot";
-      return fail(msg, code, subscription);
+      if (snap?.rate_limits_available) {
+        return fail("Usage temporarily throttled", "throttled", subscription);
+      }
+      // rate_limits_available:false — the SDK says plan limits don't apply to
+      // this session (API key, Bedrock, or Vertex) or the OAuth token is
+      // missing the profile scope (an older sign-in). If we know the user is
+      // on a claude.ai plan (pro/max/team/enterprise), the stale token is the
+      // likely culprit and signing in again fixes it.
+      if (subscription) {
+        return fail(
+          "Sign in to Claude Code again (/login) to enable usage reporting",
+          "no_scope",
+          subscription,
+        );
+      }
+      return fail(
+        "This session has no plan rate limits (API key, Bedrock, or Vertex)",
+        "no_plan",
+        subscription,
+      );
     }
 
     clearTimeout(watchdog);
