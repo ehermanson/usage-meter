@@ -82,18 +82,12 @@ enum CodexClient {
             pools.append(UsagePool(title: title, windows: windows))
         }
 
-        // Drop named pools whose windows exactly duplicate an earlier pool
-        // (e.g. a per-model limit that mirrors the default) to cut noise.
-        var seen = Set<String>()
-        let deduped = pools.filter { pool in
-            let sig = pool.windows
-                .map { "\($0.label):\($0.usedPercent):\($0.resetAt?.timeIntervalSince1970 ?? -1)" }
-                .joined(separator: "|")
-            return seen.insert(sig).inserted
-        }
-
-        if deduped.isEmpty { return .failed("Codex", "No windows", plan: plan) }
-        return .ok("Codex", pools: deduped, plan: plan)
+        // Every map entry represents a distinct metered limit ID. Preserve named
+        // model pools even when their current values match the default pool: new
+        // pools (including GPT-5.6 Sol/Terra/Luna) commonly begin at the same 0%
+        // utilization and reset time but diverge as soon as those models are used.
+        if pools.isEmpty { return .failed("Codex", "No windows", plan: plan) }
+        return .ok("Codex", pools: pools, plan: plan)
     }
 
     /// The default "codex" pool gets no subheader; named pools show their label.

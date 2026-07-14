@@ -44,8 +44,8 @@ struct CodexParseTests {
         #expect(usage.allWindows[0].usedPercent == 5.0)
     }
 
-    @Test("pools with identical windows are de-duplicated")
-    func dedupesIdenticalPools() {
+    @Test("distinct model pools are preserved when their windows match")
+    func preservesDistinctPoolsWithIdenticalWindows() {
         let window: [String: Any] = ["usedPercent": 42.0, "windowDurationMins": 300]
         let root: [String: Any] = [
             "rateLimitsByLimitId": [
@@ -54,7 +54,45 @@ struct CodexParseTests {
             ]
         ]
         let usage = CodexClient.parse(root)
-        #expect(usage.pools.count == 1)  // the mirror pool collapses into the first
+        #expect(usage.pools.map(\.title) == [nil, "GPT-5"])
+    }
+
+    @Test("GPT-5.6 SOL family pools use their backend model names")
+    func parsesSolFamilyPools() {
+        // Newly provisioned pools can all start at the same utilization and reset.
+        // They are still independent metered limits and must remain visible.
+        let primary: [String: Any] = [
+            "usedPercent": 0, "windowDurationMins": 300, "resetsAt": 1_783_600_000,
+        ]
+        let secondary: [String: Any] = [
+            "usedPercent": 0, "windowDurationMins": 10_080, "resetsAt": 1_784_000_000,
+        ]
+        let root: [String: Any] = [
+            "rateLimitsByLimitId": [
+                "codex": ["primary": primary, "secondary": secondary],
+                "gpt-5.6-sol": [
+                    "limitId": "gpt-5.6-sol", "limitName": "GPT-5.6 Sol",
+                    "primary": primary, "secondary": secondary,
+                ],
+                "gpt-5.6-terra": [
+                    "limitId": "gpt-5.6-terra", "limitName": "GPT-5.6 Terra",
+                    "primary": primary, "secondary": secondary,
+                ],
+                "gpt-5.6-luna": [
+                    "limitId": "gpt-5.6-luna", "limitName": "GPT-5.6 Luna",
+                    "primary": primary, "secondary": secondary,
+                ],
+            ]
+        ]
+
+        let usage = CodexClient.parse(root)
+
+        #expect(usage.error == nil)
+        #expect(usage.pools.count == 4)
+        #expect(
+            Set(usage.pools.compactMap(\.title))
+                == Set(["GPT-5.6 Sol", "GPT-5.6 Terra", "GPT-5.6 Luna"]))
+        #expect(usage.pools.allSatisfy { $0.windows.map(\.label) == ["5h", "Weekly"] })
     }
 
     @Test("empty result yields a failure")
