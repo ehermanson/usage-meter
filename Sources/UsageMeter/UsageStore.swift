@@ -32,6 +32,26 @@ final class UsageStore {
         didSet { UserDefaults.standard.set(showRemaining, forKey: "showRemaining") }
     }
 
+    /// Explicit CLAUDE_CONFIG_DIR for the Claude fetch; nil = auto-detect (the
+    /// helper mirrors the terminal: explicit env, login-shell export, then
+    /// ~/.claude when file credentials live there). The escape hatch for setups
+    /// the heuristic can't see — e.g. a config dir only ever named inside a
+    /// shell alias. Changing it refetches immediately so the effect is visible.
+    var claudeConfigDir: String? = UserDefaults.standard.string(forKey: "claudeConfigDir") {
+        didSet {
+            UserDefaults.standard.set(claudeConfigDir, forKey: "claudeConfigDir")
+            Task { await refresh(force: true) }
+        }
+    }
+
+    /// Short label for the config-dir picker: "Auto" or the folder with the
+    /// home directory abbreviated ("~/.claude").
+    var claudeConfigDirLabel: String {
+        guard let dir = claudeConfigDir else { return "Auto" }
+        let home = NSHomeDirectory()
+        return dir.hasPrefix(home) ? "~" + dir.dropFirst(home.count) : dir
+    }
+
     /// The providers polled each pass, in display order. Add one here to surface a
     /// new source — the fetch loop, throttling, last-good caching, and section
     /// styling are all keyed off this list, so nothing else needs to change.

@@ -24,14 +24,24 @@ enum ClaudeClient {
             return .failed("Claude", "Claude helper missing from the app bundle")
         }
 
+        // An explicit config-dir override (set in the dropdown) is forwarded as
+        // CLAUDE_CODE's own CLAUDE_CONFIG_DIR, which the helper honors before
+        // any auto-detection. Whether the variable is set also selects the
+        // credential store (unset → Keychain, set → .credentials.json), so it
+        // is only ever passed when the user chose a folder.
+        var env = ["USAGE_METER_CLAUDE_BIN": claude]
+        if let dir = UserDefaults.standard.string(forKey: "claudeConfigDir"), !dir.isEmpty {
+            env["CLAUDE_CONFIG_DIR"] = (dir as NSString).expandingTildeInPath
+        }
+
         let result: ProcessTools.Result
         do {
             result = try await ProcessTools.run(
                 executable: node,
                 arguments: [helper.path],
                 cwd: helper.deletingLastPathComponent(),
-                extraEnv: ["USAGE_METER_CLAUDE_BIN": claude],
-                timeout: 40
+                extraEnv: env,
+                timeout: 75  // > the helper's own 65s watchdog (config-dir probe may retry)
             )
         } catch {
             return .failed("Claude", error.localizedDescription, retryable: true)

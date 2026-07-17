@@ -47,6 +47,13 @@ struct MenuContentView: View {
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
 
+            // Only offered once Claude Code was detected — for setups where the
+            // sign-in lives in a non-default CLAUDE_CONFIG_DIR the auto-detect
+            // heuristic can't see (e.g. one set only inside a shell alias).
+            if store.visibleProviders.contains(where: { $0.name == "Claude" }) {
+                claudeConfigPicker
+            }
+
             Toggle("Launch at Login", isOn: $launchAtLogin)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
@@ -113,6 +120,36 @@ struct MenuContentView: View {
         .controlSize(.small)
     }
 
+    /// "Auto" resolves the Claude config dir the way the user's terminal would;
+    /// choosing a folder pins CLAUDE_CONFIG_DIR for the usage fetch instead.
+    private var claudeConfigPicker: some View {
+        Menu {
+            Button {
+                store.claudeConfigDir = nil
+            } label: {
+                pickerRow("Auto-detect", checked: store.claudeConfigDir == nil)
+            }
+            if store.claudeConfigDir != nil {
+                Button {
+                    // Current selection — shown for context, nothing to do.
+                } label: {
+                    pickerRow(store.claudeConfigDirLabel, checked: true)
+                }
+                .disabled(true)
+            }
+            Divider()
+            Button("Choose Folder…") { chooseClaudeConfigDir() }
+        } label: {
+            Label("Claude config: \(store.claudeConfigDirLabel)", systemImage: "folder")
+                .font(.system(size: 11))
+        }
+        .menuStyle(.borderlessButton)
+        .controlSize(.small)
+        .help(
+            "Where Claude Code keeps its sign-in (CLAUDE_CONFIG_DIR). "
+                + "Auto works for most setups.")
+    }
+
     // Shown only when GitHub has a release newer than this build. Clicking opens
     // the .dmg download — the lightweight update path (no in-place swap).
     private func updateRow(version: String) -> some View {
@@ -176,6 +213,23 @@ struct MenuContentView: View {
 
     private func quit() {
         NSApplication.shared.terminate(nil)
+    }
+
+    private func chooseClaudeConfigDir() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        // Config dirs are dotfolders (~/.claude), invisible without this.
+        panel.showsHiddenFiles = true
+        panel.directoryURL = URL(fileURLWithPath: NSHomeDirectory())
+        panel.message =
+            "Choose the folder Claude Code keeps its sign-in state in (usually ~/.claude)."
+        panel.prompt = "Use Folder"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            store.claudeConfigDir = url.path
+        }
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {

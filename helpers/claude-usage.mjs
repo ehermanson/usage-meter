@@ -7,7 +7,9 @@
 //                  "subscription_type": "..." }
 //   { "ok": false, "error": "Rate limited. Please try again later.", "code": "rate_limit_error" }
 
-const OVERALL_TIMEOUT_MS = 35_000;
+// Generous enough for two warm CLI startups (the config-dir probe retries
+// once on an empty snapshot); each startup is individually capped at 30s.
+const OVERALL_TIMEOUT_MS = 65_000;
 
 function emit(obj) {
   process.stdout.write(JSON.stringify(obj) + "\n");
@@ -80,29 +82,76 @@ function resolveClaudeBin() {
 }
 
 // Claude Code resolves its sign-in state relative to CLAUDE_CONFIG_DIR — and
-// *whether* the variable is set changes where credentials live: unset uses the
-// macOS Keychain, set uses `$CLAUDE_CONFIG_DIR/.credentials.json`. Setups that
-// pin it per-invocation (e.g. `alias claude='CLAUDE_CONFIG_DIR=~/.claude
-// claude'`) keep their sign-in in that file, which a GUI-spawned bare CLI never
-// finds — the headless session then reports rate_limits_available:false even
-// though the user's own terminal works fine. Mirror the terminal: explicit env,
-// then a login-shell export, then ~/.claude *only when file credentials exist
-// there* (forcing the var on a Keychain-based setup would break it instead).
+// *whether* the variable is set changes where credentials are looked up (the
+// exact store is a CLI internal we can't reliably detect from outside).
+// Setups that pin it per-invocation (e.g. `alias claude='CLAUDE_CONFIG_DIR=
+// ~/.claude claude'`) sign in under the pinned dir, which a GUI-spawned bare
+// CLI never sees — the headless session then reports
+// rate_limits_available:false even though the user's own terminal works fine.
+//
+// Resolution: an explicit setting (the app's picker or a real env var) wins;
+// then a login-shell export; otherwise start unset like a bare spawn. `source`
+// tells the caller whether the choice was the user's ("user") or merely a
+// guess ("none") that a failed fetch is allowed to flip.
 function resolveConfigDir() {
-  if (process.env.CLAUDE_CONFIG_DIR) return process.env.CLAUDE_CONFIG_DIR;
+  if (process.env.CLAUDE_CONFIG_DIR) {
+    return { dir: process.env.CLAUDE_CONFIG_DIR, source: "user" };
+  }
   try {
     const exported = execFileSync(
       "/bin/sh",
       ["-lc", 'printf "%s" "$CLAUDE_CONFIG_DIR"'],
       { encoding: "utf8" },
     ).trim();
-    if (exported) return exported;
+    if (exported) return { dir: exported, source: "user" };
   } catch {
     /* shell lookup failed */
   }
-  const dot = join(homedir(), ".claude");
-  if (existsSync(join(dot, ".credentials.json"))) return dot;
-  return null;
+  return { dir: null, source: "none" };
+}
+
+// A prompt iterable that never yields keeps the query handle open long enough
+// to issue the usage control request, exactly like Relay's PromptQueue.
+async function* idlePrompt() {
+  await new Promise(() => {});
+}
+
+// One full fetch: warm CLI subprocess (inheriting this process's env, incl.
+// any CLAUDE_CONFIG_DIR set by the caller) → get_usage → snapshot.
+async function readUsageSnapshot(startup, pathToClaudeCodeExecutable) {
+  const warm = await startup({
+    options: { pathToClaudeCodeExecutable },
+    initializeTimeoutMs: 30_000,
+  });
+  const handle = warm.query(idlePrompt());
+  try {
+    const getUsage = handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    if (typeof getUsage !== "function") {
+      return fail("SDK too old: get_usage not available", "unsupported");
+    }
+    try {
+      return await getUsage.call(handle);
+    } catch (err) {
+      failIfOutdatedCli(String(err?.message ?? err ?? ""));
+      throw err;
+    }
+  } finally {
+    try {
+      await handle.close();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+// "Empty": the CLI answered but says plan limits don't apply and carries no
+// data — the signature of a config-dir mismatch (vs. an error or throttle).
+function isEmptySnapshot(snap) {
+  return (
+    !snap?.error &&
+    !snap?.rate_limits_available &&
+    (!snap?.rate_limits || typeof snap.rate_limits !== "object")
+  );
 }
 
 async function main() {
@@ -111,75 +160,61 @@ async function main() {
   if (!pathToClaudeCodeExecutable) {
     return fail("Claude Code executable not found", "claude_not_found");
   }
-  // The spawned CLI inherits this process's env, so setting it here is enough.
-  const configDir = resolveConfigDir();
+  const { dir: configDir, source } = resolveConfigDir();
   if (configDir) process.env.CLAUDE_CONFIG_DIR = configDir;
-  const warm = await startup({
-    options: { pathToClaudeCodeExecutable },
-    initializeTimeoutMs: 30_000,
-  });
 
-  // A prompt iterable that never yields keeps the query handle open long enough
-  // to issue the usage control request, exactly like Relay's PromptQueue.
-  async function* idlePrompt() {
-    await new Promise(() => {});
+  let snap = await readUsageSnapshot(startup, pathToClaudeCodeExecutable);
+
+  // Probe: an empty snapshot usually means the config-dir guess missed the
+  // sign-in (Keychain vs a pinned CLAUDE_CONFIG_DIR are separate credential
+  // worlds). When the choice was ours — not the user's — flip the guess and
+  // try once more: unset → ~/.claude. Costs one extra warm startup, only on
+  // the failure path, and self-corrects both kinds of setup.
+  if (isEmptySnapshot(snap) && source !== "user") {
+    const dot = join(homedir(), ".claude");
+    if (existsSync(dot)) {
+      process.env.CLAUDE_CONFIG_DIR = dot;
+      const retry = await readUsageSnapshot(startup, pathToClaudeCodeExecutable);
+      // Keep whichever attempt carries data; on a double miss prefer the one
+      // that at least knows the subscription (it yields a better message).
+      if (!isEmptySnapshot(retry) || retry?.subscription_type) snap = retry;
+    }
   }
-  const handle = warm.query(idlePrompt());
 
-  try {
-    const getUsage = handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
-    if (typeof getUsage !== "function") {
-      return fail("SDK too old: get_usage not available", "unsupported");
+  if (snap?.error) {
+    const msg = String(snap.error.message ?? "usage error");
+    failIfOutdatedCli(msg);
+    return fail(msg, snap.error.type ?? "error");
+  }
+  const limits = snap?.rate_limits;
+  const subscription = snap?.subscription_type ?? snap?.subscriptionType ?? null;
+  if (!limits || typeof limits !== "object") {
+    // rate_limits_available:true but rate_limits:null means the usage endpoint
+    // is momentarily throttled — a soft, retryable state, not a hard failure.
+    if (snap?.rate_limits_available) {
+      return fail("Usage temporarily throttled", "throttled", subscription);
     }
-    let snap;
-    try {
-      snap = await getUsage.call(handle);
-    } catch (err) {
-      failIfOutdatedCli(String(err?.message ?? err ?? ""));
-      throw err;
-    }
-
-    if (snap?.error) {
-      const msg = String(snap.error.message ?? "usage error");
-      failIfOutdatedCli(msg);
-      return fail(msg, snap.error.type ?? "error");
-    }
-    const limits = snap?.rate_limits;
-    const subscription = snap?.subscription_type ?? snap?.subscriptionType ?? null;
-    if (!limits || typeof limits !== "object") {
-      // rate_limits_available:true but rate_limits:null means the usage endpoint
-      // is momentarily throttled — a soft, retryable state, not a hard failure.
-      if (snap?.rate_limits_available) {
-        return fail("Usage temporarily throttled", "throttled", subscription);
-      }
-      // rate_limits_available:false — the SDK says plan limits don't apply to
-      // this session (API key, Bedrock, or Vertex) or the OAuth token is
-      // missing the profile scope (an older sign-in). If we know the user is
-      // on a claude.ai plan (pro/max/team/enterprise), the stale token is the
-      // likely culprit and signing in again fixes it.
-      if (subscription) {
-        return fail(
-          "Sign in to Claude Code again (/login) to enable usage reporting",
-          "no_scope",
-          subscription,
-        );
-      }
+    // rate_limits_available:false — the SDK says plan limits don't apply to
+    // this session (API key, Bedrock, or Vertex) or the OAuth token is
+    // missing the profile scope (an older sign-in). If we know the user is
+    // on a claude.ai plan (pro/max/team/enterprise), the stale token is the
+    // likely culprit and signing in again fixes it.
+    if (subscription) {
       return fail(
-        "This session has no plan rate limits (API key, Bedrock, or Vertex)",
-        "no_plan",
+        "Sign in to Claude Code again (/login) to enable usage reporting",
+        "no_scope",
         subscription,
       );
     }
-
-    clearTimeout(watchdog);
-    emit({ ok: true, rate_limits: limits, subscription_type: subscription });
-  } finally {
-    try {
-      await handle.close();
-    } catch {
-      /* ignore */
-    }
+    return fail(
+      "This session has no plan rate limits (API key, Bedrock, or Vertex)",
+      "no_plan",
+      subscription,
+    );
   }
+
+  clearTimeout(watchdog);
+  emit({ ok: true, rate_limits: limits, subscription_type: subscription });
   process.exit(0);
 }
 
