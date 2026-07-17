@@ -79,12 +79,41 @@ function resolveClaudeBin() {
   return null;
 }
 
+// Claude Code resolves its sign-in state relative to CLAUDE_CONFIG_DIR — and
+// *whether* the variable is set changes where credentials live: unset uses the
+// macOS Keychain, set uses `$CLAUDE_CONFIG_DIR/.credentials.json`. Setups that
+// pin it per-invocation (e.g. `alias claude='CLAUDE_CONFIG_DIR=~/.claude
+// claude'`) keep their sign-in in that file, which a GUI-spawned bare CLI never
+// finds — the headless session then reports rate_limits_available:false even
+// though the user's own terminal works fine. Mirror the terminal: explicit env,
+// then a login-shell export, then ~/.claude *only when file credentials exist
+// there* (forcing the var on a Keychain-based setup would break it instead).
+function resolveConfigDir() {
+  if (process.env.CLAUDE_CONFIG_DIR) return process.env.CLAUDE_CONFIG_DIR;
+  try {
+    const exported = execFileSync(
+      "/bin/sh",
+      ["-lc", 'printf "%s" "$CLAUDE_CONFIG_DIR"'],
+      { encoding: "utf8" },
+    ).trim();
+    if (exported) return exported;
+  } catch {
+    /* shell lookup failed */
+  }
+  const dot = join(homedir(), ".claude");
+  if (existsSync(join(dot, ".credentials.json"))) return dot;
+  return null;
+}
+
 async function main() {
   const startup = await resolveStartup();
   const pathToClaudeCodeExecutable = resolveClaudeBin();
   if (!pathToClaudeCodeExecutable) {
     return fail("Claude Code executable not found", "claude_not_found");
   }
+  // The spawned CLI inherits this process's env, so setting it here is enough.
+  const configDir = resolveConfigDir();
+  if (configDir) process.env.CLAUDE_CONFIG_DIR = configDir;
   const warm = await startup({
     options: { pathToClaudeCodeExecutable },
     initializeTimeoutMs: 30_000,
