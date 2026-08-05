@@ -188,7 +188,9 @@ final class UsageStore {
 
     /// Full: "Claude  5h 7% · Wk 31%". Compact: "Claude  5h 7%". A provider with
     /// no 5h/weekly split shows its own window label (e.g. "Gemini  Daily 12%").
-    /// With a single provider the name is dropped (e.g. "5h 7% · Wk 31%").
+    /// With a single provider the name is dropped (e.g. "5h 7% · Wk 31%") —
+    /// except for a fixed-budget plan's generic "Usage" window, which always
+    /// carries the name ("Claude Usage 6%", or "Claude Usage 94% left").
     var menuBarTitle: String {
         guard let p = menuBarProvider else { return "—" }
         var parts: [String] = []
@@ -200,7 +202,13 @@ final class UsageStore {
         }
         let body = parts.joined(separator: " · ")
         if body.isEmpty { return p.name }
-        // Only label the provider when more than one is available.
+        // A fixed-budget plan's lone "Usage" window isn't self-describing the
+        // way "5h 7% · Wk 31%" is — always name the provider for it, and say
+        // which way the number runs when it counts down instead of up.
+        if parts.count == 1, p.fiveHour?.label == "Usage" {
+            return "\(p.name) \(body)\(showRemaining ? " left" : "")"
+        }
+        // Otherwise only label the provider when more than one is available.
         return selectableProviders.count > 1 ? "\(p.name)  \(body)" : body
     }
 

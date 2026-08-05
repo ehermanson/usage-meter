@@ -59,7 +59,7 @@ struct ProviderRow: View {
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(pool.windows) { window in
-                        WindowBar(window: window, showRemaining: showRemaining)
+                        WindowBar(window: window, accent: accent, showRemaining: showRemaining)
                     }
                 }
             }

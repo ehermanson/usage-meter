@@ -6,7 +6,7 @@ struct MenuContentView: View {
     @State private var updates = UpdateChecker.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             if store.providers.isEmpty {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -16,59 +16,28 @@ struct MenuContentView: View {
             } else if store.visibleProviders.isEmpty {
                 noProvidersDetected
             } else {
+                // Each provider sits in its own soft card — grouping comes from
+                // the surface, not dividers, which keeps sections scannable.
                 ForEach(store.visibleProviders) { provider in
-                    if provider.id != store.visibleProviders.first?.id {
-                        Divider().opacity(0.5)
-                    }
                     let style = store.style(for: provider.name)
                     ProviderRow(
                         provider: provider,
                         accent: style.accent,
                         logoResource: style.logoResource,
                         showRemaining: store.showRemaining)
+                        .cardSurface()
                 }
             }
 
-            Divider()
-
-            // The picker only matters when there's a choice of provider to pin;
-            // with a single source it always resolves to that one, so hide it.
-            if store.selectableProviders.count > 1 {
-                menuBarPicker
-            }
-
-            if store.compactMenuBarApplies {
-                Toggle("Compact (5hr only)", isOn: $store.compactMenuBar)
-                    .toggleStyle(.checkbox)
-                    .font(.system(size: 11))
-            }
-
-            Toggle("Show % remaining", isOn: $store.showRemaining)
-                .toggleStyle(.checkbox)
-                .font(.system(size: 11))
-
-            // Only offered once Claude Code was detected — for setups where the
-            // sign-in lives in a non-default CLAUDE_CONFIG_DIR the auto-detect
-            // heuristic can't see (e.g. one set only inside a shell alias).
-            if store.visibleProviders.contains(where: { $0.name == "Claude" }) {
-                claudeConfigPicker
-            }
-
-            Toggle("Launch at Login", isOn: $launchAtLogin)
-                .toggleStyle(.checkbox)
-                .font(.system(size: 11))
-                .onChange(of: launchAtLogin) { _, newValue in
-                    applyLaunchAtLogin(newValue)
-                }
+            settingsCard
 
             if let update = updates.availableUpdate {
-                Divider()
                 updateRow(version: update.version)
             }
 
             footer
         }
-        .padding(14)
+        .padding(12)
         .frame(width: 280)
         .onAppear {
             launchAtLogin = LoginItem.isEnabled
@@ -97,6 +66,74 @@ struct MenuContentView: View {
         .padding(.vertical, 4)
     }
 
+    /// All preferences grouped in one card, System Settings-style: every row is
+    /// a plain label on the left and its control on the right, so mixed control
+    /// types (menus, switches) still scan as one aligned column.
+    private var settingsCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("Settings")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .textCase(.uppercase)
+                .kerning(0.6)
+
+            // The picker only matters when there's a choice of provider to pin;
+            // with a single source it always resolves to that one, so hide it.
+            if store.selectableProviders.count > 1 {
+                settingRow("Menu bar") { menuBarPicker }
+            }
+
+            if store.compactMenuBarApplies {
+                settingRow("Compact (5hr only)") {
+                    settingSwitch("Compact (5hr only)", isOn: $store.compactMenuBar)
+                }
+            }
+
+            settingRow("Show % remaining") {
+                settingSwitch("Show % remaining", isOn: $store.showRemaining)
+            }
+
+            settingRow("Launch at Login") {
+                settingSwitch("Launch at Login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        applyLaunchAtLogin(newValue)
+                    }
+            }
+
+            // Last so the switches above stay a contiguous group. Only offered
+            // once Claude Code was detected — for setups where the sign-in
+            // lives in a non-default CLAUDE_CONFIG_DIR the auto-detect
+            // heuristic can't see (e.g. one set only inside a shell alias).
+            if store.visibleProviders.contains(where: { $0.name == "Claude" }) {
+                settingRow("Claude config") { claudeConfigPicker }
+            }
+        }
+        .cardSurface()
+    }
+
+    /// One settings row: label left, control right, on a consistent height so
+    /// switch rows and menu rows line up.
+    private func settingRow(_ label: String, @ViewBuilder control: () -> some View)
+        -> some View
+    {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 11))
+            Spacer(minLength: 0)
+            control()
+        }
+        .frame(minHeight: 16)
+    }
+
+    /// A mini switch whose text label is hidden visually but kept for VoiceOver
+    /// (the row's Text is a separate element, so the control needs its own).
+    private func settingSwitch(_ label: String, isOn: Binding<Bool>) -> some View {
+        Toggle(label, isOn: isOn)
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .labelsHidden()
+    }
+
     private var menuBarPicker: some View {
         Menu {
             Button {
@@ -113,11 +150,13 @@ struct MenuContentView: View {
                 }
             }
         } label: {
-            Label("Menu bar: \(store.pinnedDisplayLabel)", systemImage: "pin")
+            Text(store.pinnedDisplayLabel)
                 .font(.system(size: 11))
+                .foregroundStyle(.secondary)
         }
         .menuStyle(.borderlessButton)
         .controlSize(.small)
+        .fixedSize()
     }
 
     /// "Auto" resolves the Claude config dir the way the user's terminal would;
@@ -140,14 +179,22 @@ struct MenuContentView: View {
             Divider()
             Button("Choose Folder…") { chooseClaudeConfigDir() }
         } label: {
-            Label("Claude config: \(store.claudeConfigDirLabel)", systemImage: "folder")
+            // Bounded + middle-truncated so an arbitrarily long config path
+            // can't push the control out of the fixed-width card; the full
+            // path lives in the tooltip.
+            Text(store.claudeConfigDirLabel)
                 .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 150, alignment: .trailing)
         }
         .menuStyle(.borderlessButton)
         .controlSize(.small)
         .help(
-            "Where Claude Code keeps its sign-in (CLAUDE_CONFIG_DIR). "
-                + "Auto works for most setups.")
+            store.claudeConfigDir.map { "CLAUDE_CONFIG_DIR: \($0)" }
+                ?? "Where Claude Code keeps its sign-in (CLAUDE_CONFIG_DIR). "
+                    + "Auto works for most setups.")
     }
 
     // Shown only when GitHub has a release newer than this build. Clicking opens
@@ -190,7 +237,14 @@ struct MenuContentView: View {
     @ViewBuilder
     private var updatedLabel: some View {
         if let updated = store.lastUpdated {
-            Text("Updated \(updated, format: .dateTime.hour().minute().second())")
+            // Relative reads faster than a clock time and makes staleness
+            // obvious. TimelineView keeps it ticking even when refreshes fail
+            // (a failed pass leaves `lastUpdated` untouched, so nothing else
+            // would re-render). Exact time lives in the tooltip.
+            TimelineView(.everyMinute) { context in
+                Text("Updated \(Format.updatedAgo(updated, now: context.date))")
+            }
+            .help("Last refreshed \(updated.formatted(date: .omitted, time: .standard))")
         } else {
             Text("—")
         }
@@ -236,5 +290,19 @@ struct MenuContentView: View {
         if !LoginItem.setEnabled(enabled) {
             launchAtLogin = LoginItem.isEnabled  // revert on failure
         }
+    }
+}
+
+extension View {
+    /// The panel's shared card treatment: a soft adaptive surface with a
+    /// hairline stroke that crisps the edge (mostly visible in light mode).
+    func cardSurface() -> some View {
+        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        return
+            self
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.05), in: shape)
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.07)))
     }
 }

@@ -44,6 +44,54 @@ final class StatusBarController {
             guard let self, self.panel.isVisible else { return }
             self.positionPanel()
         }
+
+        // Dev affordance: `--open-panel` pops the dropdown right after launch so
+        // it can be screenshotted without assistive access to click the item.
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("--open-panel") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.show()
+            }
+        }
+
+        // `--snapshot <path>` renders the panel to a PNG (after giving the
+        // usage fetch a moment) and quits — self-rendering, so it needs no
+        // screen-recording permission. Exits nonzero if the capture fails.
+        if let i = args.firstIndex(of: "--snapshot"), args.indices.contains(i + 1) {
+            let path = args[i + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+                guard let self else { return }
+                // Snapshot implies an open panel: `show()` lays the content out
+                // and sizes the panel to fit, so the capture is never the stale
+                // 280×200 the panel was constructed with.
+                if !self.panel.isVisible { self.show() }
+                do {
+                    try self.snapshotPanel(to: path)
+                } catch {
+                    FileHandle.standardError.write(
+                        Data("snapshot failed (\(path)): \(error)\n".utf8))
+                    exit(EXIT_FAILURE)
+                }
+                NSApplication.shared.terminate(nil)
+            }
+        }
+    }
+
+    private enum SnapshotError: Error {
+        case captureUnavailable  // no content view / no bitmap rep
+        case pngEncodingFailed
+    }
+
+    /// Renders the panel's content view into a PNG at `path`.
+    private func snapshotPanel(to path: String) throws {
+        guard let view = panel.contentView,
+            let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+        else { throw SnapshotError.captureUnavailable }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let data = rep.representation(using: .png, properties: [:]) else {
+            throw SnapshotError.pngEncodingFailed
+        }
+        try data.write(to: URL(fileURLWithPath: path))
     }
 
     // MARK: - Menu-bar button
@@ -137,7 +185,7 @@ final class StatusBarController {
     // MARK: - Panel construction
 
     private static func makePanel(content: NSView) -> NSPanel {
-        let panel = NSPanel(
+        let panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: 280, height: 200),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -181,6 +229,15 @@ final class StatusBarController {
             return vev
         }
     }
+}
+
+/// A borderless window can't become key by default, which leaves every control
+/// inside rendering in its *inactive* appearance — switches stay gray whether
+/// on or off. Opting in restores active-state tinting; combined with
+/// `.nonactivatingPanel` the panel takes key status without activating the app,
+/// exactly like a native menu.
+private final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
 }
 
 /// `NSHostingView` that reports when its SwiftUI content's ideal size changes,

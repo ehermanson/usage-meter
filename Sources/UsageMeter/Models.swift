@@ -134,4 +134,40 @@ enum Format {
     static func percent(_ value: Double) -> String {
         "\(value.formatted(.number.precision(.fractionLength(0))))%"
     }
+
+    /// Footer freshness: "just now" / "2m ago" / "1h 5m ago" / "3d ago". Coarser
+    /// than a clock time on purpose — staleness is the question it answers.
+    static func updatedAgo(_ date: Date, now: Date = Date()) -> String {
+        let mins = Int(now.timeIntervalSince(date) / 60)
+        if mins < 1 { return "just now" }
+        if mins < 60 { return "\(mins)m ago" }
+        let hours = mins / 60
+        if hours < 24 {
+            let remMins = mins % 60
+            return remMins == 0 ? "\(hours)h ago" : "\(hours)h \(remMins)m ago"
+        }
+        return "\(hours / 24)d ago"
+    }
+
+    /// The absolute reset moment for tooltips: "Resets today at 7:00 PM",
+    /// "Resets tomorrow at 9:00 AM", a weekday ("Resets Sunday at 7:00 PM") for
+    /// the next six calendar days — the span where a weekday is unambiguous —
+    /// and an explicit date ("Resets Aug 10 at 7:00 PM") from seven days out,
+    /// where the same weekday has come around again. Counted in calendar days,
+    /// not elapsed seconds, so DST transitions can't shift the boundary.
+    static func absoluteReset(_ date: Date, now: Date = Date()) -> String {
+        let time = date.formatted(date: .omitted, time: .shortened)
+        let cal = Calendar.current
+        let days =
+            cal.dateComponents(
+                [.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)
+            ).day ?? 0
+        switch days {
+        case ...0: return "Resets today at \(time)"
+        case 1: return "Resets tomorrow at \(time)"
+        case ..<7: return "Resets \(date.formatted(.dateTime.weekday(.wide))) at \(time)"
+        default:
+            return "Resets \(date.formatted(date: .abbreviated, time: .omitted)) at \(time)"
+        }
+    }
 }

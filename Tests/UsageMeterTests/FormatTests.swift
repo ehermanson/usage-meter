@@ -39,4 +39,50 @@ struct FormatTests {
         #expect(Format.percent(4.6) == "5%")
         #expect(Format.percent(0) == "0%")
     }
+
+    @Test("updated-ago buckets: just now, minutes, hours, days")
+    func updatedAgoBuckets() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        func ago(_ seconds: TimeInterval) -> String {
+            Format.updatedAgo(now.addingTimeInterval(-seconds), now: now)
+        }
+        #expect(ago(10) == "just now")
+        #expect(ago(59) == "just now")
+        #expect(ago(2 * 60) == "2m ago")
+        #expect(ago(59 * 60) == "59m ago")
+        #expect(ago(60 * 60) == "1h ago")  // whole hours drop the 0m
+        #expect(ago(3600 + 5 * 60) == "1h 5m ago")
+        #expect(ago(26 * 3600) == "1d ago")
+    }
+
+    // Locale-sensitive time formatting keeps these to prefix checks; the day
+    // bucketing (today / tomorrow / weekday / date) is what's under test.
+    @Test("absolute reset picks the nearest day description")
+    func absoluteResetBuckets() {
+        // A fixed reference away from midnight so +2h stays "today" and
+        // +30h lands on "tomorrow" regardless of time zone drift: use noon.
+        let cal = Calendar.current
+        let noon = cal.date(
+            bySettingHour: 12, minute: 0, second: 0, of: Date(timeIntervalSince1970: 1_700_000_000))!
+        func reset(_ hours: Double) -> String {
+            Format.absoluteReset(noon.addingTimeInterval(hours * 3600), now: noon)
+        }
+        // Calendar-day stepping (not hours*3600) so DST can't skew the buckets.
+        func resetDays(_ days: Int) -> String {
+            Format.absoluteReset(cal.date(byAdding: .day, value: days, to: noon)!, now: noon)
+        }
+        let weekdays = [
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+        ]
+        #expect(reset(2).hasPrefix("Resets today at"))
+        #expect(reset(26).hasPrefix("Resets tomorrow at"))
+        #expect(reset(3 * 24).hasPrefix("Resets "))
+        #expect(!reset(3 * 24).contains("today"))
+        #expect(!reset(3 * 24).contains("tomorrow"))
+        // Six days out a weekday is still unambiguous — use it…
+        #expect(weekdays.contains { resetDays(6).contains($0) })
+        // …but seven days out is the same weekday as today: explicit date.
+        #expect(weekdays.allSatisfy { !resetDays(7).contains($0) })
+        #expect(weekdays.allSatisfy { !resetDays(10).contains($0) })
+    }
 }
