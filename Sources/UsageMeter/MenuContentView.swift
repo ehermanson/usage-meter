@@ -24,8 +24,9 @@ struct MenuContentView: View {
                         provider: provider,
                         accent: style.accent,
                         logoResource: style.logoResource,
-                        showRemaining: store.showRemaining)
-                        .cardSurface()
+                        showRemaining: store.showRemaining
+                    )
+                    .cardSurface()
                 }
             }
 
@@ -113,7 +114,9 @@ struct MenuContentView: View {
 
     /// One settings row: label left, control right, on a consistent height so
     /// switch rows and menu rows line up.
-    private func settingRow(_ label: String, @ViewBuilder control: () -> some View)
+    private func settingRow(
+        _ label: String, @ViewBuilder control: () -> some View
+    )
         -> some View
     {
         HStack(spacing: 8) {
@@ -194,7 +197,7 @@ struct MenuContentView: View {
         .help(
             store.claudeConfigDir.map { "CLAUDE_CONFIG_DIR: \($0)" }
                 ?? "Where Claude Code keeps its sign-in (CLAUDE_CONFIG_DIR). "
-                    + "Auto works for most setups.")
+                + "Auto works for most setups.")
     }
 
     // Shown only when GitHub has a release newer than this build. Clicking opens
