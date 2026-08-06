@@ -214,7 +214,20 @@ final class StatusBarController {
             glass.cornerRadius = radius
             glass.contentView = content
             content.autoresizingMask = [.width, .height]
-            return glass
+
+            // `cornerRadius` rounds the glass, but its backing layer stays a
+            // square rect — so the panel's auto-computed window shadow traces a
+            // square and leaves a hard, squared-off edge under the bottom
+            // corners. Clip through a masked container (the VEV path below gets
+            // this for free via `masksToBounds`) so the shadow follows the
+            // rounded shape.
+            let clip = NSView()
+            clip.wantsLayer = true
+            clip.layer?.cornerRadius = radius
+            clip.layer?.masksToBounds = true
+            glass.autoresizingMask = [.width, .height]
+            clip.addSubview(glass)
+            return clip
         } else {
             let vev = NSVisualEffectView()
             vev.material = .popover
