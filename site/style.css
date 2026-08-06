@@ -1,0 +1,622 @@
+:root {
+  --bg: #0d0e11;
+  --surface: #16181d;
+  --border: #2a2d34;
+  --text: #e8eaed;
+  --text-2: #8b8f98;
+  --accent: #34c759;
+  --accent-ink: #04140a;
+  --warn: #ffd60a;
+  --danger: #ff453a;
+
+  /* Per-provider brand accents — mirror the app (Claude orange, Codex teal,
+     Gemini blue). These live only inside the mockup, never as page chrome. */
+  --claude: #ff9f0a;
+  --codex: #30b0c7;
+  --gemini: #0a84ff;
+
+  /* Card surfaces inside the panel, matching the app's translucent overlays. */
+  --panel-card: rgba(255, 255, 255, 0.05);
+  --panel-stroke: rgba(255, 255, 255, 0.08);
+  --panel-track: rgba(255, 255, 255, 0.09);
+
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+
+  --section: 96px;
+  --measure: 680px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #fbfbfc;
+    --surface: #ffffff;
+    --border: #e2e4e8;
+    --text: #1a1c20;
+    --text-2: #626771;
+    --accent: #248a3d;
+    --accent-ink: #ffffff;
+    --warn: #b8860b;
+    --danger: #d70015;
+
+    --claude: #d17a00;
+    --codex: #128aa0;
+    --gemini: #007aff;
+
+    --panel-card: rgba(0, 0, 0, 0.035);
+    --panel-stroke: rgba(0, 0, 0, 0.08);
+    --panel-track: rgba(0, 0, 0, 0.08);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+
+/* A single, consistent keyboard-focus ring in the accent color. */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, var(--text));
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* A soft ambient wash so the page reads with depth rather than flat black.
+   Fixed, low-opacity, and well behind everything. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 42% at 50% -6%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%),
+    radial-gradient(45% 30% at 88% 8%, color-mix(in srgb, var(--gemini) 12%, transparent), transparent 72%);
+}
+
+a { color: inherit; }
+
+/* Nav */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+.nav-inner {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.nav-brand img { display: block; border-radius: 5px; }
+.nav-links {
+  display: flex;
+  gap: 22px;
+  font-size: 15px;
+}
+.nav-links a {
+  color: var(--text-2);
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+.nav-links a:hover { color: var(--text); }
+/* A small ghost pill echoing the accent — a clear, quiet secondary CTA. */
+.nav-links a.nav-cta {
+  color: var(--accent);
+  padding: 5px 13px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.nav-links a.nav-cta:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+/* Layout */
+main {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+section { padding-block: var(--section); }
+section + section { padding-top: 0; }
+
+/* Hero */
+.hero { text-align: center; }
+.eyebrow {
+  margin: 0 0 18px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+h1 {
+  font-size: clamp(2.3rem, 6.6vw, 3.6rem);
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+  margin: 0 auto;
+  max-width: 15ch;
+  /* A subtle top-lit sheen on the headline. */
+  background: linear-gradient(
+    180deg,
+    var(--text) 55%,
+    color-mix(in srgb, var(--text) 82%, var(--bg))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.subline {
+  color: var(--text-2);
+  font-size: 1.2rem;
+  max-width: 46ch;
+  margin: 22px auto 34px;
+}
+
+/* Primary CTA: a solid accent button with a crisp darker edge, a hairline top
+   highlight, and a soft accent-tinted lift — crafted rather than flat/generic.
+   It rises on hover and presses in on click. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #fff 16%, var(--accent)),
+    var(--accent) 62%
+  );
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  padding: 12px 22px;
+  border-radius: 11px;
+  border: 1px solid color-mix(in srgb, #000 14%, var(--accent));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 32%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.22),
+    0 8px 22px color-mix(in srgb, var(--accent) 26%, transparent);
+  transition: transform 130ms ease, box-shadow 180ms ease, filter 130ms ease;
+}
+.btn-i { display: block; margin-left: -2px; }
+.btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 36%, transparent),
+    0 3px 6px rgba(0, 0, 0, 0.26),
+    0 14px 30px color-mix(in srgb, var(--accent) 36%, transparent);
+}
+.btn:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.22),
+    0 1px 2px rgba(0, 0, 0, 0.22);
+}
+
+.badge-line {
+  color: var(--text-2);
+  font-size: 0.85rem;
+  margin: 14px 0 0;
+}
+
+/* Staggered entrance so the hero assembles itself on load. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes riseCentered {
+  from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+  to { opacity: 1; transform: translateX(-50%); }
+}
+.eyebrow, h1, .subline, .hero > .btn, .badge-line {
+  animation: rise 0.7s cubic-bezier(0.22, 0.61, 0.24, 1) both;
+}
+.eyebrow { animation-delay: 0.05s; }
+h1 { animation-delay: 0.12s; }
+.subline { animation-delay: 0.2s; }
+.hero > .btn { animation-delay: 0.28s; }
+.badge-line { animation-delay: 0.34s; }
+.mockup-wrap { animation: riseCentered 0.9s cubic-bezier(0.22, 0.61, 0.24, 1) 0.42s both; }
+@media (prefers-reduced-motion: reduce) {
+  .eyebrow, h1, .subline, .hero > .btn, .badge-line, .mockup-wrap { animation: none; }
+}
+
+/* Scroll reveal for the lower sections. Only active when JS is present (the
+   `.js` class), so no-JS users never get stuck with hidden content. The `.in`
+   class is added by the IntersectionObserver as each element enters view. */
+.js [data-reveal] {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.6s cubic-bezier(0.22, 0.61, 0.24, 1),
+    transform 0.6s cubic-bezier(0.22, 0.61, 0.24, 1);
+  transition-delay: var(--reveal-delay, 0s);
+}
+.js [data-reveal].in { opacity: 1; transform: none; }
+/* Stagger the three feature items as the row comes in. */
+.js .how-list li[data-reveal]:nth-child(2) { --reveal-delay: 0.09s; }
+.js .how-list li[data-reveal]:nth-child(3) { --reveal-delay: 0.18s; }
+@media (prefers-reduced-motion: reduce) {
+  .js [data-reveal] { opacity: 1; transform: none; transition: none; }
+}
+
+/* Mockup */
+.mockup-wrap {
+  /* Break out wider than the ~680px text column so a centered menu-bar item and
+     the right-side system tray both fit without colliding. `left: 50%` +
+     translate centers it on the page (main is page-centered), independent of
+     the parent's width; the width clamp keeps it inside the viewport. */
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(740px, calc(100vw - 32px));
+  margin-top: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* A soft, blurred aurora behind the panel in the three providers' colors — a
+   little ambient life that also explains the per-provider tinting below. */
+.mockup-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -70px -60px -30px;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 46% at 26% 30%, color-mix(in srgb, var(--claude) 55%, transparent), transparent 68%),
+    radial-gradient(40% 48% at 74% 26%, color-mix(in srgb, var(--gemini) 55%, transparent), transparent 68%),
+    radial-gradient(52% 42% at 50% 74%, color-mix(in srgb, var(--codex) 45%, transparent), transparent 70%);
+  filter: blur(46px);
+  opacity: 0.28;
+}
+@media (prefers-color-scheme: light) {
+  .mockup-wrap::before { opacity: 0.22; filter: blur(52px); }
+}
+
+/* A slice of the macOS menu bar. Our menu extra shows the app's real title
+   (gauge + highest 5h · weekly) and reads as "open" (highlighted) and is
+   centered so the panel descends from directly beneath it; the system extras
+   sit at the right, absolutely positioned so they don't shift that centering.
+   Everything is monochrome, like the real menu bar. */
+.menubar {
+  position: relative;
+  z-index: 2;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  /* A faint translucent band with a top edge highlight and a soft lower
+     separation — enough to read as the menu bar without a fake wallpaper. */
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
+    0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.mb-app {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  /* Centered in the bar so the dropdown descends from directly beneath it —
+     showing only a slice of the bar, a right-anchored item looks like a bug. */
+  margin-left: auto;
+  margin-right: auto;
+  border-radius: 6px;
+}
+.mb-app .gauge { display: block; }
+.mb-title { letter-spacing: -0.01em; }
+/* Open menu extra: the neutral rounded highlight macOS draws behind it. */
+.mb-app.is-open {
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+}
+
+.mb-sys {
+  position: absolute;
+  top: 0;
+  right: 14px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.mb-icon { display: block; opacity: 0.9; }
+.mb-clock { opacity: 0.92; padding-left: 1px; }
+
+/* The dropdown panel. Fixed dropdown width (~280px like the app), soft shadow,
+   hairline border. Providers are separate cards inside it, not plain sections. */
+.panel {
+  position: relative;
+  z-index: 1;
+  width: 288px;
+  max-width: 100%;
+  /* Centered, directly beneath the centered menu-bar item. */
+  margin-top: 7px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+@media (prefers-color-scheme: light) {
+  .panel { box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12); }
+}
+
+/* Each provider in its own soft card — grouping from the surface, not dividers. */
+.card {
+  background: var(--panel-card);
+  border: 1px solid var(--panel-stroke);
+  border-radius: 9px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.p-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Brand logos are black silhouettes on transparent. The app renders them as
+   monochrome template images tinted to the text color; we get the same effect
+   by inverting them to near-white in dark mode and leaving them black in light,
+   so no colored marks appear on the page. */
+.p-logo {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  object-fit: contain;
+  filter: invert(1);
+  opacity: 0.92;
+}
+@media (prefers-color-scheme: light) {
+  .p-logo { filter: none; opacity: 0.85; }
+}
+.p-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+.p-badge {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-2);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-2) 22%, transparent);
+}
+
+.win { display: flex; flex-direction: column; gap: 7px; }
+.win-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--sans);
+}
+.win-label { font-size: 11px; color: var(--text-2); }
+.win-reset {
+  font-size: 10px;
+  color: var(--text-2);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.win-pct {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.win-mode {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-2);
+  opacity: 0.8;
+  margin-left: 3px;
+}
+
+/* The bar sits on its own line below the label row, full card width, thin. */
+.track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--panel-track);
+  overflow: hidden;
+}
+.fill {
+  display: block;
+  height: 100%;
+  width: var(--pct);
+  border-radius: 999px;
+  animation: fill 400ms ease-out both;
+}
+/* A gentle leading-to-trailing deepening, like the app's gradient fill. */
+.fill.accent { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, transparent), var(--accent)); }
+.fill.yellow { background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 65%, transparent), var(--warn)); }
+.fill.red { background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 65%, transparent), var(--danger)); }
+
+@keyframes fill {
+  from { width: 0; }
+  to { width: var(--pct); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fill { animation: none; }
+}
+
+/* Settings card — label left, control right, System Settings-style. */
+.settings { gap: 11px; }
+.s-title {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  opacity: 0.8;
+}
+.s-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+}
+.s-label { font-size: 11px; }
+.s-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.s-menu .chev { opacity: 0.8; }
+
+/* A mini macOS-style switch. */
+.sw {
+  width: 26px;
+  height: 15px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-2) 40%, transparent);
+  position: relative;
+  flex: none;
+  transition: background 120ms ease;
+}
+.sw::after {
+  content: "";
+  position: absolute;
+  top: 1.5px;
+  left: 1.5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.sw.is-on { background: var(--accent); }
+.sw.is-on::after { left: 12.5px; }
+
+/* Footer row — plain, no card surface, like the app. */
+.p-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.pf-updated { display: inline-flex; align-items: center; gap: 5px; }
+.pf-refresh { display: block; opacity: 0.85; }
+
+/* How it works */
+.how-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+.how-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.how-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+.how-icon svg { display: block; }
+.how-list strong { font-weight: 600; }
+.how-list span { color: var(--text-2); font-size: 0.95rem; }
+
+/* Privacy */
+.privacy p {
+  text-align: center;
+  color: var(--text-2);
+  max-width: 60ch;
+  margin: 0 auto;
+}
+
+/* Install */
+.install { text-align: center; }
+.steps {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  color: var(--text-2);
+  margin: 0 0 24px;
+}
+
+/* Footer */
+.footer {
+  border-top: 1px solid var(--border);
+  margin-top: var(--section);
+}
+.footer p {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: 22px 24px;
+  text-align: center;
+  color: var(--text-2);
+  font-size: 0.85rem;
+}
+.footer a { color: var(--text-2); }
+.footer a:hover { color: var(--text); }
+
+@media (max-width: 640px) {
+  :root { --section: 64px; }
+  .how-list { grid-template-columns: 1fr; gap: 24px; }
+  /* No room for the system cluster on a phone — hide it. The item and panel
+     already center by default. */
+  .menubar { padding: 0 12px; }
+  .mb-sys { display: none; }
+}

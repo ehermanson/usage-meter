@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Usage Meter: Know when you're about to hit your limit</title>
+  <meta name="description" content="A macOS menu-bar app that shows your Claude, Codex, and Gemini usage: percent used and time to reset, at a glance. Free and open source.">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Usage Meter: Know when you're about to hit your limit">
+  <meta property="og:description" content="A macOS menu-bar app that shows your Claude, Codex, and Gemini usage: percent used and time to reset, at a glance.">
+  <meta property="og:image" content="usage-meter-app-icon.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Usage Meter: Know when you're about to hit your limit">
+  <meta name="twitter:description" content="A macOS menu-bar app that shows your Claude, Codex, and Gemini usage: percent used and time to reset, at a glance.">
+  <meta name="twitter:image" content="usage-meter-app-icon.png">
+
+  <link rel="icon" type="image/png" href="usage-meter-app-icon.png">
+  <link rel="apple-touch-icon" href="usage-meter-app-icon.png">
+  <link rel="stylesheet" href="style.css">
+  <!-- Flags that JS is available so reveal targets can start hidden without
+       risking hidden content for no-JS users. Runs before paint to avoid flash. -->
+  <script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="#top">
+        <img src="usage-meter-app-icon.png" width="20" height="20" alt="Usage Meter app icon">
+        <span>Usage Meter</span>
+      </a>
+      <nav class="nav-links">
+        <a href="https://github.com/ehermanson/usage-meter">GitHub</a>
+        <a class="nav-cta" href="https://github.com/ehermanson/usage-meter/releases/latest">Download</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="eyebrow">Claude · Codex · Gemini</p>
+      <h1>Know when you're about to hit your limit.</h1>
+      <p class="subline">A macOS menu-bar app that shows your Claude, Codex, and Gemini usage: percent used and time to reset, at a glance.</p>
+
+      <a class="btn" href="https://github.com/ehermanson/usage-meter/releases/latest">
+        <svg class="btn-i" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M8 2.5v7.2"></path>
+          <path d="M4.6 6.6 8 10l3.4-3.4"></path>
+          <path d="M3 13h10"></path>
+        </svg>
+        Download for macOS
+      </a>
+      <p class="badge-line">Free · Open source · macOS 14+</p>
+
+      <div class="mockup-wrap">
+        <!-- A slice of the macOS menu bar, with the Usage Meter item open. -->
+        <div class="menubar" aria-hidden="true">
+          <!-- Our menu extra, highlighted because its dropdown is open. -->
+          <span class="mb-app is-open">
+            <svg class="gauge" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3.2 15.2a8 8 0 1 1 13.6 0"></path>
+              <path d="M10 10.6 13.6 7"></path>
+              <circle cx="10" cy="10.6" r="1.15" fill="currentColor" stroke="none"></circle>
+            </svg>
+            <span class="mb-title">Claude&nbsp;&nbsp;5h 38% · Wk 78%</span>
+          </span>
+
+          <!-- The system menu extras, pinned to the right like the real bar. -->
+          <span class="mb-sys">
+            <svg class="mb-icon" viewBox="0 0 28 14" width="24" height="12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+              <rect x="1" y="2.4" width="22" height="9.2" rx="2.6"></rect>
+              <rect x="24.4" y="5" width="1.8" height="4" rx="0.9" fill="currentColor" stroke="none"></rect>
+              <rect x="2.8" y="4.2" width="14" height="5.6" rx="1.2" fill="currentColor" stroke="none"></rect>
+            </svg>
+            <svg class="mb-icon" viewBox="0 0 22 16" width="17" height="13" fill="currentColor" aria-hidden="true">
+              <path d="M11 3.2c3 0 5.8 1.15 7.9 3.1a1 1 0 0 0 1.4-1.44A13.4 13.4 0 0 0 11 1.2 13.4 13.4 0 0 0 1.7 4.86 1 1 0 0 0 3.1 6.3 11.4 11.4 0 0 1 11 3.2Z"></path>
+              <path d="M11 7.2a7.6 7.6 0 0 1 5.1 1.96 1 1 0 1 0 1.34-1.48A9.6 9.6 0 0 0 11 5.2a9.6 9.6 0 0 0-6.44 2.48A1 1 0 1 0 5.9 9.16 7.6 7.6 0 0 1 11 7.2Z"></path>
+              <path d="M11 11a3.7 3.7 0 0 1 2.3.8 1 1 0 0 0 1.28-1.53A5.7 5.7 0 0 0 11 9a5.7 5.7 0 0 0-3.58 1.27A1 1 0 0 0 8.7 11.8 3.7 3.7 0 0 1 11 11Z"></path>
+              <circle cx="11" cy="13.4" r="1.35"></circle>
+            </svg>
+            <svg class="mb-icon" viewBox="0 0 18 18" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <circle cx="7.6" cy="7.6" r="5"></circle>
+              <path d="M11.4 11.4 16 16"></path>
+            </svg>
+            <svg class="mb-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <rect x="3.2" y="4.6" width="17.6" height="6.2" rx="3.1"></rect>
+              <rect x="3.2" y="13.2" width="17.6" height="6.2" rx="3.1"></rect>
+              <circle cx="16.4" cy="7.7" r="2.15" fill="currentColor" stroke="none"></circle>
+              <circle cx="7.6" cy="16.3" r="2.15" fill="currentColor" stroke="none"></circle>
+            </svg>
+            <span class="mb-clock">Wed&nbsp;9:41&nbsp;AM</span>
+          </span>
+        </div>
+
+        <div class="panel" role="img" aria-label="Usage Meter dropdown panel. Claude, Max plan: 5-hour window 38 percent used, resets in 2 hours 12 minutes; weekly window 78 percent used, resets in 3 days 4 hours. Codex, Plus plan: 5-hour window 9 percent used, resets in 4 hours 41 minutes; weekly window 22 percent used, resets in 6 days 1 hour. Gemini: daily window 91 percent used, resets in 34 minutes. Settings and controls below.">
+          <div class="card" style="--accent: var(--claude)">
+            <div class="p-head">
+              <img class="p-logo" src="claude-logo.png" alt="" width="14" height="14">
+              <span class="p-name">Claude</span>
+              <span class="p-badge">Max</span>
+            </div>
+            <div class="win">
+              <div class="win-top">
+                <span class="win-label">5h</span>
+                <span class="win-reset">2h 12m</span>
+                <span class="win-pct">38%<span class="win-mode">used</span></span>
+              </div>
+              <span class="track"><span class="fill accent" style="--pct:38%"></span></span>
+            </div>
+            <div class="win">
+              <div class="win-top">
+                <span class="win-label">Weekly</span>
+                <span class="win-reset">3d 4h</span>
+                <span class="win-pct">78%<span class="win-mode">used</span></span>
+              </div>
+              <span class="track"><span class="fill yellow" style="--pct:78%"></span></span>
+            </div>
+          </div>
+
+          <div class="card" style="--accent: var(--codex)">
+            <div class="p-head">
+              <img class="p-logo" src="codex-logo.png" alt="" width="14" height="14">
+              <span class="p-name">Codex</span>
+              <span class="p-badge">Plus</span>
+            </div>
+            <div class="win">
+              <div class="win-top">
+                <span class="win-label">5h</span>
+                <span class="win-reset">4h 41m</span>
+                <span class="win-pct">9%<span class="win-mode">used</span></span>
+              </div>
+              <span class="track"><span class="fill accent" style="--pct:9%"></span></span>
+            </div>
+            <div class="win">
+              <div class="win-top">
+                <span class="win-label">Weekly</span>
+                <span class="win-reset">6d 1h</span>
+                <span class="win-pct">22%<span class="win-mode">used</span></span>
+              </div>
+              <span class="track"><span class="fill accent" style="--pct:22%"></span></span>
+            </div>
+          </div>
+
+          <div class="card" style="--accent: var(--gemini)">
+            <div class="p-head">
+              <img class="p-logo" src="gemini-logo.png" alt="" width="14" height="14">
+              <span class="p-name">Gemini</span>
+            </div>
+            <div class="win">
+              <div class="win-top">
+                <span class="win-label">Daily</span>
+                <span class="win-reset">34m</span>
+                <span class="win-pct">91%<span class="win-mode">used</span></span>
+              </div>
+              <span class="track"><span class="fill red" style="--pct:91%"></span></span>
+            </div>
+          </div>
+
+          <div class="card settings">
+            <div class="s-title">Settings</div>
+            <div class="s-row">
+              <span class="s-label">Menu bar</span>
+              <span class="s-menu">Claude<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+            </div>
+            <div class="s-row">
+              <span class="s-label">Compact (5hr only)</span>
+              <span class="sw" role="switch" aria-checked="false"></span>
+            </div>
+            <div class="s-row">
+              <span class="s-label">Show % remaining</span>
+              <span class="sw" role="switch" aria-checked="false"></span>
+            </div>
+            <div class="s-row">
+              <span class="s-label">Launch at Login</span>
+              <span class="sw is-on" role="switch" aria-checked="true"></span>
+            </div>
+            <div class="s-row">
+              <span class="s-label">Claude config</span>
+              <span class="s-menu">Auto<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+            </div>
+          </div>
+
+          <div class="p-footer">
+            <span class="pf-updated">Updated just now
+              <svg class="pf-refresh" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+                <path d="M13 8a5 5 0 1 1-1.5-3.5"></path>
+                <path d="M13 3v2.6h-2.6"></path>
+              </svg>
+            </span>
+            <span class="pf-quit">Quit</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="how">
+      <ul class="how-list">
+        <li data-reveal>
+          <span class="how-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="15" r="4.5"></circle>
+              <path d="M11.2 11.8 19 4"></path>
+              <path d="M16 7l2.5 2.5"></path>
+            </svg>
+          </span>
+          <strong>Reads what you already have.</strong>
+          <span>Uses your local Claude Code, Codex CLI, and Gemini sign-ins. No account, no API keys to paste.</span>
+        </li>
+        <li data-reveal>
+          <span class="how-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2.5"></rect>
+              <path d="M3 9h18"></path>
+              <path d="M14 6.1h4"></path>
+            </svg>
+          </span>
+          <strong>Stays out of the way.</strong>
+          <span>Lives in the menu bar. The title shows your highest 5-hour usage; open it for every window and reset time.</span>
+        </li>
+        <li data-reveal>
+          <span class="how-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 17a8 8 0 1 1 16 0"></path>
+              <path d="M12 13l3.5-3"></path>
+              <path d="M12 17.2v.01"></path>
+            </svg>
+          </span>
+          <strong>Warns before you're cut off.</strong>
+          <span>Bars turn yellow at 75% and red at 90%.</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="privacy">
+      <p data-reveal>Everything stays on your Mac. Usage Meter reads local credentials, talks only to each provider's own usage endpoint, and sends nothing anywhere else. No analytics, no telemetry.</p>
+    </section>
+
+    <section class="install" data-reveal>
+      <p class="steps">Download the DMG → drag to Applications → it appears in your menu bar.</p>
+      <a class="btn" href="https://github.com/ehermanson/usage-meter/releases/latest">
+        <svg class="btn-i" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M8 2.5v7.2"></path>
+          <path d="M4.6 6.6 8 10l3.4-3.4"></path>
+          <path d="M3 13h10"></path>
+        </svg>
+        Download for macOS
+      </a>
+    </section>
+  </main>
+
+  <footer class="footer" data-reveal>
+    <p>MIT licensed · <a href="https://github.com/ehermanson/usage-meter">GitHub</a></p>
+  </footer>
+
+  <!-- Reveal each tagged element once as it scrolls into view. Progressive:
+       with no JS the elements are simply visible (no `.js` class). -->
+  <script>
+    (function () {
+      var els = document.querySelectorAll('[data-reveal]');
+      var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce || !('IntersectionObserver' in window)) {
+        for (var i = 0; i < els.length; i++) els[i].classList.add('in');
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+        });
+      }, { rootMargin: '0px 0px -12% 0px', threshold: 0.15 });
+      els.forEach(function (e) { io.observe(e); });
+    })();
+  </script>
+</body>
+</html>
