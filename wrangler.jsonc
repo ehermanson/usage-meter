@@ -1,0 +1,10 @@
+{
+  // Deploys the static marketing site in ./site as a Cloudflare Worker with
+  // static assets (no Worker code — assets-only). Used by the Git-connected
+  // Workers build: Build command empty, Deploy command `npx wrangler deploy`.
+  "name": "usage-meter",
+  "compatibility_date": "2025-09-09",
+  "assets": {
+    "directory": "./site"
+  }
+}
