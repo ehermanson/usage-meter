@@ -199,6 +199,12 @@
       <p class="eyebrow" data-reveal>Questions</p>
       <div class="faq-list" data-reveal>
         <details class="faq-item" open>
+          <summary>Why would I want this?<span class="faq-mark" aria-hidden="true"></span></summary>
+          <div class="faq-a">
+            <p>If you work against Claude, Codex, or Gemini rate limits, you know the problem: you hit the wall mid-task with no warning, then wait on a reset you can't see. Usage Meter keeps each one's current usage and reset time in your menu bar — bars turn yellow at 75% and red at 90% — so you can pace your work or switch tools before you're cut off.</p>
+          </div>
+        </details>
+        <details class="faq-item">
           <summary>Which tools does it track?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
             <p>Claude Code, the Codex CLI, and Gemini — signed in through Antigravity or the Gemini CLI. For each one it shows the rate-limit windows (5-hour and weekly) as percent used, with the time until they reset.</p>
@@ -217,15 +223,15 @@
           </div>
         </details>
         <details class="faq-item">
-          <summary>How does it warn me before I hit a limit?<span class="faq-mark" aria-hidden="true"></span></summary>
+          <summary>Can you add another tool, like Grok or Cursor?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
-            <p>The menu-bar title shows your highest 5-hour usage. Bars turn yellow at 75% and red at 90%, so a limit is visible well before you reach it.</p>
+            <p>Not yet — today it tracks Claude, Codex, and Gemini. It's open source, though, and a new provider is mostly one small client that reads that tool's usage. If you want one added, open an issue or send a pull request <a href="https://github.com/ehermanson/usage-meter">on GitHub</a> — forks and contributions are welcome.</p>
           </div>
         </details>
         <details class="faq-item">
           <summary>Is it free? What do I need?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
-            <p>It's free and open source under the MIT license. It runs on macOS 14 and later.</p>
+            <p>Yes — free and open source under the MIT license. It runs on macOS 14 and later.</p>
           </div>
         </details>
       </div>
