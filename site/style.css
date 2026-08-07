@@ -398,12 +398,22 @@ h1 { animation-delay: 0.06s; }
   color: var(--text);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
-  /* A faint translucent band with a top edge highlight and a soft lower
-     separation — enough to read as the menu bar without a fake wallpaper. */
+}
+/* The translucent band (and its hairlines) lives on a pseudo so its left/right
+   ends can feather out — the strip reads as a slice of a full-width menu bar
+   rather than a floating band with hard-cut edges. Content stays crisp above. */
+.menubar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background: color-mix(in srgb, var(--text) 6%, transparent);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent),
-    0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
+    inset 0 -1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 13%, #000 87%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 13%, #000 87%, transparent);
 }
 
 .mb-app {
