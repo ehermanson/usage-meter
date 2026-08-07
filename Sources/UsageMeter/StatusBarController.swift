@@ -28,9 +28,8 @@ final class StatusBarController {
     /// Keep the panel this far from the screen's left/right/bottom edges.
     private let edgeMargin: CGFloat = 8
 
-    /// True while the panel is open, so the item can draw in its inverted
-    /// (highlighted) appearance. The menu-bar image is not a template, so this
-    /// inversion is ours to do — see `ink`.
+    /// True while the panel is open. AppKit won't draw a status item's highlight
+    /// for us here, so the open state is painted by hand — see `applyHighlight`.
     private var isHighlighted = false
 
     /// How the ring is drawn right now, eased toward the store's real values.
@@ -212,13 +211,13 @@ final class StatusBarController {
     /// The color the mark and text are drawn in.
     ///
     /// A template image would get this for free, but the ring carries a usage
-    /// color and template mode would flatten it, so both cases are handled here.
-    /// The menu bar has its own appearance — it can be dark while the app is
-    /// light — so this reads the button's `effectiveAppearance` rather than the
-    /// app's. While the panel is open AppKit draws a dark highlight behind the
-    /// item in both appearances, and the content inverts to white against it.
+    /// color and template mode would flatten it, so it's handled here. The menu
+    /// bar has its own appearance — it can be dark while the app is light — so
+    /// this reads the button's `effectiveAppearance` rather than the app's.
+    ///
+    /// Unaffected by the open state: the highlight we draw is a wash tinted from
+    /// this same color, so the content stays legible against it either way.
     private var ink: NSColor {
-        if isHighlighted { return .white }
         let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
         let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         return isDark ? .white : .black
@@ -239,6 +238,32 @@ final class StatusBarController {
         // The image carries no text AppKit can read, so the flat title is the
         // accessible label.
         button.setAccessibilityLabel(store.menuBarTitle)
+        applyHighlight(to: button)
+    }
+
+    /// Paints the open state ourselves, as a rounded wash behind the whole item.
+    ///
+    /// `highlight(_:)` and `isHighlighted` both turn out to be dead ends here:
+    /// the flag reads `true` for as long as the panel is open and AppKit still
+    /// draws nothing, so there is no amount of re-asserting that would help.
+    /// Painting the button's own layer covers its full frame — wider than our
+    /// image, which stops at the content — so the wash lines up with the item's
+    /// real bounds the way a native highlight does.
+    private func applyHighlight(to button: NSStatusBarButton) {
+        button.wantsLayer = true
+        // Fully rounded, matching how the system draws menu-bar selection —
+        // derived from the button's height rather than pinned to a number, so it
+        // stays a capsule if the menu bar's metrics ever change.
+        button.layer?.cornerRadius = button.bounds.height / 2
+        // AppKit draws its own highlight while the button is held, which
+        // composites with this one and then lifts with the mouse. That step is
+        // fixed in absolute terms — it's the system's contribution, not ours —
+        // so a heavier wash can't remove it, only make it a smaller share of
+        // what's on screen, which is what actually reads as less of a flash.
+        button.layer?.backgroundColor =
+            isHighlighted
+            ? ink.withAlphaComponent(0.26).cgColor
+            : NSColor.clear.cgColor
     }
 
     /// Keep the menu-bar image in sync with the store. `@Observable` fires
@@ -344,7 +369,6 @@ final class StatusBarController {
         hostingView.layoutSubtreeIfNeeded()
         positionPanel()
         panel.makeKeyAndOrderFront(nil)
-        statusItem.button?.highlight(true)
         isHighlighted = true
         render()
 
@@ -352,13 +376,47 @@ final class StatusBarController {
         eventMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
         ) { [weak self] _ in
-            self?.hide()
+            guard let self else { return }
+            let point = NSEvent.mouseLocation
+            // A global monitor is supposed to exclude our own app's events, but
+            // on some macOS versions a click on the status item arrives here
+            // anyway. Hiding on it would be wrong twice over: the button's own
+            // action fires next, sees a hidden panel, and reopens it — so the
+            // click appears to do nothing at all. Toggling is `togglePanel`'s
+            // job; this monitor only handles genuine outside clicks.
+            if let frame = self.buttonHitFrame, frame.contains(point) { return }
+            self.hide()
         }
+    }
+
+    /// The status-item button's rect in screen coordinates, valid on whichever
+    /// display and Space the menu bar currently occupies.
+    private var buttonScreenFrame: NSRect? {
+        guard let button = statusItem.button, let window = button.window else { return nil }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    }
+
+    /// `buttonScreenFrame` grown to meet the top of the screen. The reported rect
+    /// stops a few points shy of the edge, but a click in that strip is still a
+    /// click on our item — and treating it as an outside click is what makes the
+    /// panel close and immediately reopen.
+    ///
+    /// Only closes a small, plausible gap. If the button isn't sitting against
+    /// the menu bar at all — hidden menu bar, an off-screen or not-yet-placed
+    /// item — reaching for the screen edge would claim a tall strip of the
+    /// display and start swallowing genuine outside clicks, so that case keeps
+    /// the button's own frame.
+    private var buttonHitFrame: NSRect? {
+        guard let frame = buttonScreenFrame else { return nil }
+        guard let screen = statusItem.button?.window?.screen else { return frame }
+        let gap = screen.frame.maxY - frame.maxY
+        guard gap > 0, gap < 12 else { return frame }
+        return NSRect(
+            x: frame.minX, y: frame.minY, width: frame.width, height: frame.height + gap)
     }
 
     private func hide() {
         panel.orderOut(nil)
-        statusItem.button?.highlight(false)
         isHighlighted = false
         render()
         if let eventMonitor {
@@ -370,14 +428,13 @@ final class StatusBarController {
     // MARK: - Positioning
 
     private func positionPanel() {
-        guard let button = statusItem.button, let buttonWindow = button.window else { return }
+        guard let buttonWindow = statusItem.button?.window,
+            let buttonFrame = buttonScreenFrame
+        else { return }
 
         let size = hostingView.fittingSize
         guard size.width > 0, size.height > 0 else { return }
 
-        // The button's actual on-screen rect — valid on whichever display and
-        // Space the menu bar currently lives on.
-        let buttonFrame = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
         let screen = buttonWindow.screen ?? NSScreen.main
         let visible = screen?.visibleFrame ?? buttonFrame
 
