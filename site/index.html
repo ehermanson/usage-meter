@@ -195,52 +195,40 @@
       </div>
     </section>
 
-    <section class="how">
-      <ul class="how-list">
-        <li class="feature feature-wide" data-reveal>
-          <div class="feature-core">
-            <span class="how-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="8" cy="15" r="4.4"></circle>
-                <path d="M11.1 11.9 19 4"></path>
-                <path d="M16 7l2.4 2.4"></path>
-              </svg>
-            </span>
-            <strong>Reads what you already have.</strong>
-            <span class="feature-desc">Uses your local Claude Code, Codex CLI, and Gemini sign-ins. No account, no API keys to paste.</span>
+    <section class="faq">
+      <p class="eyebrow" data-reveal>Questions</p>
+      <div class="faq-list" data-reveal>
+        <details class="faq-item" open>
+          <summary>Which tools does it track?<span class="faq-mark" aria-hidden="true"></span></summary>
+          <div class="faq-a">
+            <p>Claude Code, the Codex CLI, and Gemini — signed in through Antigravity or the Gemini CLI. For each one it shows the rate-limit windows (5-hour and weekly) as percent used, with the time until they reset.</p>
           </div>
-        </li>
-        <li class="feature" data-reveal>
-          <div class="feature-core">
-            <span class="how-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4.5" width="18" height="15" rx="2.6"></rect>
-                <path d="M3 9.2h18"></path>
-                <path d="M14.2 6.8h4"></path>
-              </svg>
-            </span>
-            <strong>Stays out of the way.</strong>
-            <span class="feature-desc">Lives in the menu bar. The title shows your highest 5-hour usage; open it for every window and reset time.</span>
+        </details>
+        <details class="faq-item">
+          <summary>Do I need API keys or an account?<span class="faq-mark" aria-hidden="true"></span></summary>
+          <div class="faq-a">
+            <p>No. Usage Meter reads the sign-ins already on your Mac from Claude Code, Codex, and Gemini. There's nothing to paste and no account to create.</p>
           </div>
-        </li>
-        <li class="feature" data-reveal>
-          <div class="feature-core">
-            <span class="how-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 17a8 8 0 1 1 16 0"></path>
-                <path d="M12 13.2 15.4 10"></path>
-                <path d="M12 17.3v.01"></path>
-              </svg>
-            </span>
-            <strong>Warns before you're cut off.</strong>
-            <span class="feature-desc">Bars turn yellow at 75% and red at 90%.</span>
+        </details>
+        <details class="faq-item">
+          <summary>Where does my usage data go?<span class="faq-mark" aria-hidden="true"></span></summary>
+          <div class="faq-a">
+            <p>Nowhere else. It reads local credentials and talks only to each provider's own usage endpoint. Nothing is sent anywhere else — no analytics, no telemetry.</p>
           </div>
-        </li>
-      </ul>
-    </section>
-
-    <section class="privacy">
-      <p data-reveal>Everything stays on your Mac. Usage Meter reads local credentials, talks only to each provider's own usage endpoint, and sends nothing anywhere else. No analytics, no telemetry.</p>
+        </details>
+        <details class="faq-item">
+          <summary>How does it warn me before I hit a limit?<span class="faq-mark" aria-hidden="true"></span></summary>
+          <div class="faq-a">
+            <p>The menu-bar title shows your highest 5-hour usage. Bars turn yellow at 75% and red at 90%, so a limit is visible well before you reach it.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary>Is it free? What do I need?<span class="faq-mark" aria-hidden="true"></span></summary>
+          <div class="faq-a">
+            <p>It's free and open source under the MIT license. It runs on macOS 14 and later.</p>
+          </div>
+        </details>
+      </div>
     </section>
 
     <section class="install" data-reveal>
