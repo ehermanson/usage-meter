@@ -34,7 +34,7 @@
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", monospace;
 
-  --section: 108px;
+  --section: 96px;
   --measure: 680px;
 }
 
@@ -190,33 +190,23 @@ section + section { padding-top: 0; }
   text-align: center;
   padding-top: 150px;
 }
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0 0 22px;
-  padding: 6px 13px 6px 11px;
-  border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--hair));
-  box-shadow: var(--inner-lip);
+/* Section heading for the lower sections — quiet, centered, with the same
+   top-lit sheen as the H1 so the hierarchy reads as one system. */
+.section-title {
+  text-align: center;
+  margin: 0 0 34px;
+  font-size: clamp(1.6rem, 3.4vw, 2.1rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  background: linear-gradient(
+    180deg,
+    var(--text) 55%,
+    color-mix(in srgb, var(--text) 82%, var(--bg))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
-/* A tiny live dot — only on the hero eyebrow, where it reads as "status". */
-.hero .eyebrow::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
-}
-/* The FAQ eyebrow centers under a centered section. */
-.faq .eyebrow { display: block; width: max-content; margin-inline: auto; }
 h1 {
   font-size: clamp(2.4rem, 6.9vw, 3.9rem);
   line-height: 1.04;
@@ -636,7 +626,6 @@ h1 { animation-delay: 0.06s; }
 
 /* FAQ — a single machined panel with hairline-divided disclosure rows. Reads
    like documentation, not marketing. */
-.faq .eyebrow { margin-bottom: 26px; }
 .faq-list {
   border-radius: 22px;
   border: 1px solid var(--hair);
@@ -704,14 +693,66 @@ h1 { animation-delay: 0.06s; }
   .faq-item[open] .faq-a { animation: none; }
 }
 
-/* Install */
-.install { text-align: center; }
-.steps {
-  font-family: var(--mono);
-  font-size: 0.95rem;
-  color: var(--text-2);
-  margin: 0 0 24px;
+/* Closing CTA — a machined "get started" card so the page ends on a real
+   moment instead of a bare button floating in whitespace. */
+.cta-card {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 8px;
+  border-radius: 30px;
+  background: var(--shell);
+  border: 1px solid var(--hair);
+  box-shadow: var(--inner-lip);
 }
+.cta-inner {
+  padding: 44px 40px 38px;
+  border-radius: 23px;
+  background: var(--core);
+  border: 1px solid var(--hair);
+  box-shadow:
+    var(--inner-lip),
+    0 44px 90px -56px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+.cta-title {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(1.45rem, 3vw, 1.9rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.cta-steps {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  width: max-content;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: 0.98rem;
+}
+.cta-steps li { display: flex; align-items: center; gap: 11px; }
+.cta-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--hair));
+}
+.cta .btn { margin-top: 2px; }
+.cta-note { margin: 0; color: var(--text-2); font-size: 0.85rem; }
 
 /* Footer */
 .footer {
