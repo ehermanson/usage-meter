@@ -9,15 +9,16 @@
 A tiny macOS menu-bar app showing how much of your **Claude**, **Codex**, and
 **Gemini** usage you've burned, at a glance.
 
-```
-Claude
-  5h    4%   resets in 4h 41m
-  7d   31%   resets in 3d 12h
+**[usage-meter.eric-r-hermanson.workers.dev](https://usage-meter.eric-r-hermanson.workers.dev/)** ·
+[**Download**](https://github.com/ehermanson/usage-meter/releases/latest)
 
-Codex
-  5h    0%   resets in 4h 59m
-  Weekly 0%  resets in 6d 23h
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/demo-light.png">
+    <img alt="Usage Meter menu-bar dropdown showing Claude, Codex, and Gemini usage" src="docs/demo-light.png" width="620">
+  </picture>
+</p>
 
 The menu-bar title shows the highest 5-hour usage across all providers. Bars turn
 **yellow at 75%** and **red at 90%**. Two toggles in the dropdown: **Compact**
