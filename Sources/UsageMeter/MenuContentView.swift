@@ -310,6 +310,13 @@ struct MenuContentView: View {
 
             Spacer()
 
+            // The running version, so a just-installed update is verifiable at
+            // a glance. Absent in dev builds (`swift run` has no Info.plist).
+            if let version = Self.appVersion {
+                Text("v\(version)")
+                    .foregroundStyle(.tertiary)
+            }
+
             Button("Quit", action: quit)
         }
         // Style the row once so the timestamp and both buttons stay consistent.
@@ -318,6 +325,9 @@ struct MenuContentView: View {
         .buttonStyle(.borderless)
         .controlSize(.small)
     }
+
+    private static let appVersion =
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
 
     @ViewBuilder
     private var updatedLabel: some View {
