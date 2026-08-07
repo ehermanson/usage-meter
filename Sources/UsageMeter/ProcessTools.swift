@@ -117,7 +117,37 @@ enum ProcessTools {
             ])
     }
 
+    /// Lookups are memoized: the fallback path spawns login/interactive shells
+    /// (sourcing the user's whole rc), and the fetch loop would otherwise pay
+    /// that every pass for each tool that isn't installed. A found path is
+    /// revalidated with a cheap stat and kept until it disappears; a miss is
+    /// retried after `missRetryInterval`, so a tool installed while the app is
+    /// running still shows up without a relaunch. Locked because providers
+    /// fetch concurrently.
+    private static let cacheLock = NSLock()
+    private static var lookupCache: [String: (path: String?, at: Date)] = [:]
+    private static let missRetryInterval: TimeInterval = 300
+
     static func findExecutable(_ name: String, candidates: [String]) -> String? {
+        cacheLock.lock()
+        let cached = lookupCache[name]
+        cacheLock.unlock()
+        if let cached {
+            if let path = cached.path, FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+            if cached.path == nil, Date.now.timeIntervalSince(cached.at) < missRetryInterval {
+                return nil
+            }
+        }
+        let resolved = resolveExecutable(name, candidates: candidates)
+        cacheLock.lock()
+        lookupCache[name] = (resolved, Date.now)
+        cacheLock.unlock()
+        return resolved
+    }
+
+    private static func resolveExecutable(_ name: String, candidates: [String]) -> String? {
         for c in candidates where FileManager.default.isExecutableFile(atPath: c) {
             return c
         }

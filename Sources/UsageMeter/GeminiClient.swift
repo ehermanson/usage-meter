@@ -75,8 +75,8 @@ enum GeminiClient {
         var available = false
 
         for bucket in buckets {
-            guard let fraction = num(bucket["remainingFraction"]) else { continue }
-            guard let reset = isoDate(bucket["resetTime"] as? String),
+            guard let fraction = Parse.num(bucket["remainingFraction"]) else { continue }
+            guard let reset = Parse.isoDate(bucket["resetTime"] as? String),
                 reset.timeIntervalSinceNow > 0
             else { continue }  // skip locked/epoch
             available = true
@@ -196,32 +196,37 @@ enum GeminiClient {
         // rejected (the user revoked access or re-signed-in elsewhere).
         if let mine = ownCredentials() {
             if let token = try? await selectToken(from: [mine], now: Date(), refresh: refresher) {
-                cachedToken = token
+                cachedToken = (token.value, token.expiry)
                 return token.value
             }
         }
         let candidates = sources.compactMap { $0() }
         let token = try await selectToken(from: candidates, now: Date(), refresh: refresher)
-        cachedToken = token
-        // Copy the refresh token into our own item so the next refresh — and every
-        // one after — reads from there instead of re-prompting for the tool's item.
-        if let source = candidates.first(where: { $0.refreshToken != nil }) {
-            storeOwnCredentials(source, accessToken: token.value, expiry: token.expiry)
+        cachedToken = (token.value, token.expiry)
+        // Copy the *winning* source's refresh token into our own item so the next
+        // refresh — and every one after — reads from there instead of re-prompting
+        // for the tool's item. It must be the source that produced this token: a
+        // sibling source whose refresh just failed would only seed our item with
+        // a dead token that every later fetch retries first.
+        if token.source.refreshToken != nil {
+            storeOwnCredentials(token.source, accessToken: token.value, expiry: token.expiry)
         }
         return token.value
     }
 
-    /// Returns the first usable token across `candidates`: a still-valid access
-    /// token, or a successful refresh. A candidate that's expired with no refresh
-    /// token (or whose refresh fails) is skipped so a later source can still win —
-    /// this is what makes a stale Antigravity login fall through to the Gemini CLI.
+    /// Returns the first usable token across `candidates` — a still-valid access
+    /// token, or a successful refresh — along with the source credentials that
+    /// produced it (so only the winner's refresh token gets persisted). A
+    /// candidate that's expired with no refresh token (or whose refresh fails) is
+    /// skipped so a later source can still win — this is what makes a stale
+    /// Antigravity login fall through to the Gemini CLI.
     /// Pure but for the injected `refresh`, so the fallback order is testable.
     static func selectToken(
         from candidates: [Credentials],
         now: Date,
         refresh: (_ creds: Credentials, _ refreshToken: String) async throws
             -> (value: String, expiry: Date)
-    ) async throws -> (value: String, expiry: Date) {
+    ) async throws -> (value: String, expiry: Date, source: Credentials) {
         guard !candidates.isEmpty else {
             // No credentials from any sign-in tool means Gemini isn't set up on
             // this machine — the user doesn't use it, so hide the section.
@@ -232,7 +237,7 @@ enum GeminiClient {
         var lastError: Error?
         for creds in candidates {
             if let expiry = creds.expiry, expiry.timeIntervalSince(now) > 120 {
-                return (creds.accessToken, expiry)
+                return (creds.accessToken, expiry, creds)
             }
             guard let refreshToken = creds.refreshToken else {
                 lastError = GeminiError(
@@ -241,7 +246,8 @@ enum GeminiClient {
                 continue
             }
             do {
-                return try await refresh(creds, refreshToken)
+                let refreshed = try await refresh(creds, refreshToken)
+                return (refreshed.value, refreshed.expiry, creds)
             } catch {
                 lastError = error
             }
@@ -270,7 +276,7 @@ enum GeminiClient {
         else {
             throw GeminiError("Gemini token refresh failed")
         }
-        let expiresIn = num(json["expires_in"]) ?? 3600
+        let expiresIn = Parse.num(json["expires_in"]) ?? 3600
         return (access, Date().addingTimeInterval(expiresIn))
     }
 
@@ -301,7 +307,7 @@ enum GeminiClient {
         return Credentials(
             accessToken: access,
             refreshToken: token["refresh_token"] as? String,
-            expiry: isoDate(token["expiry"] as? String),
+            expiry: Parse.isoDate(token["expiry"] as? String),
             clientID: OAuthClient.antigravity.id,
             clientSecret: OAuthClient.antigravity.secret)
     }
@@ -327,7 +333,7 @@ enum GeminiClient {
         return Credentials(
             accessToken: json["access_token"] as? String ?? "",
             refreshToken: refresh,
-            expiry: isoDate(json["expiry"] as? String),
+            expiry: Parse.isoDate(json["expiry"] as? String),
             clientID: clientID,
             clientSecret: clientSecret)
     }
@@ -345,7 +351,7 @@ enum GeminiClient {
                 "client_id": creds.clientID,
                 "client_secret": creds.clientSecret,
                 "access_token": accessToken,
-                "expiry": isoPlain.string(from: expiry),
+                "expiry": Parse.isoString(expiry),
             ])
         else { return }
         let base: [String: Any] = [
@@ -372,10 +378,10 @@ enum GeminiClient {
             let access = json["access_token"] as? String
         else { return nil }
         var expiry: Date?
-        if let ms = num(json["expiry_date"]) {
+        if let ms = Parse.num(json["expiry_date"]) {
             expiry = Date(timeIntervalSince1970: ms / 1000)
         } else if let s = json["expiry"] as? String {
-            expiry = isoDate(s)
+            expiry = Parse.isoDate(s)
         }
         return Credentials(
             accessToken: access,
@@ -416,26 +422,5 @@ enum GeminiClient {
             s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
         }
         return pairs.map { "\(enc($0.key))=\(enc($0.value))" }.joined(separator: "&")
-    }
-
-    private static func num(_ value: Any?) -> Double? {
-        if let n = value as? NSNumber { return n.doubleValue }
-        if let s = value as? String { return Double(s) }
-        return nil
-    }
-
-    private static let isoFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-    private static func isoDate(_ s: String?) -> Date? {
-        guard let s else { return nil }
-        return isoFractional.date(from: s) ?? isoPlain.date(from: s)
     }
 }

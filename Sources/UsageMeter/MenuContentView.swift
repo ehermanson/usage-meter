@@ -41,15 +41,18 @@ struct MenuContentView: View {
         }
         .padding(12)
         .frame(width: 280)
-        .onAppear {
+        // Per-open work (stale refetch, update check) lives in
+        // `StatusBarController.show()` — this view stays parented to the
+        // persistent panel, so `onAppear` fires only once per app lifetime.
+        // The panel *does* become key on every open, which is the hook that
+        // keeps the Launch at Login switch honest if the user changed the
+        // login item in System Settings while the menu was closed.
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)
+        ) { _ in
             launchAtLogin = LoginItem.isEnabled
-            // Opening the menu only refetches when the data has gone stale; a
-            // quick open right after a timer tick reuses what's already shown.
-            if store.isStale {
-                Task { await store.refresh() }
-            }
-            Task { await updates.check() }
         }
+        .onAppear { launchAtLogin = LoginItem.isEnabled }
     }
 
     // Shown when none of the supported tools are installed on this machine — the
@@ -382,6 +385,9 @@ struct MenuContentView: View {
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {
+        // No-op when the switch is just being re-synced to reality (the
+        // panel-open sync above), so only a real user toggle hits SMAppService.
+        guard enabled != LoginItem.isEnabled else { return }
         if !LoginItem.setEnabled(enabled) {
             launchAtLogin = LoginItem.isEnabled  // revert on failure
         }

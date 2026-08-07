@@ -8,14 +8,14 @@ let package = Package(
         .executableTarget(
             name: "UsageMeter",
             path: "Sources/UsageMeter",
+            // Only what the app loads at runtime (the provider marks). The app
+            // icon and marketing logos also live in Resources/ but are consumed
+            // by build.sh and the site, not by code — bundling them doubled the
+            // shipped app's resource weight for no reader.
             resources: [
                 .copy("Resources/claude-logo.png"),
                 .copy("Resources/codex-logo.png"),
-                .copy("Resources/gemini-logo.png"),
-                .copy("Resources/usage-meter-app-icon.png"),
-                .copy("Resources/usage-meter-logo.png"),
-                .copy("Resources/usage-meter-logo.svg"),
-                .copy("Resources/UsageMeter.icns")
+                .copy("Resources/gemini-logo.png")
             ]
         ),
         .testTarget(

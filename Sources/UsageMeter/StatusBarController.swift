@@ -364,6 +364,17 @@ final class StatusBarController {
     }
 
     private func show() {
+        // Per-open work lives here, not in the content view's `onAppear`: the
+        // hosting view stays parented to the persistent panel, so SwiftUI sees
+        // it "appear" exactly once for the app's lifetime — `orderOut`/
+        // `orderFront` never re-fire it. Opening refetches only when the data
+        // has gone stale, so a quick open right after a timer tick reuses what's
+        // already shown.
+        if store.isStale {
+            Task { await store.refresh() }
+        }
+        Task { await UpdateChecker.shared.check() }
+
         // Lay the content out before measuring so the very first open is placed
         // from the real fitting size, not a stale/zero one.
         hostingView.layoutSubtreeIfNeeded()

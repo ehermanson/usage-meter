@@ -158,7 +158,7 @@ enum ClaudeClient {
         else { return nil }
         return UsageWindow(
             label: label, usedPercent: util,
-            resetAt: isoDate(dict["resets_at"] as? String))
+            resetAt: Parse.isoDate(dict["resets_at"] as? String))
     }
 
     /// Per-model weekly limits arrive as `model_scoped`: an array of
@@ -173,7 +173,7 @@ enum ClaudeClient {
             else { return nil }
             return UsageWindow(
                 label: "Weekly · \(name)", usedPercent: util,
-                resetAt: isoDate(dict["resets_at"] as? String))
+                resetAt: Parse.isoDate(dict["resets_at"] as? String))
         }
     }
 
@@ -205,23 +205,6 @@ enum ClaudeClient {
         return amount.formatted(.currency(code: code).precision(.fractionLength(0)))
     }
 
-    // Formatters are expensive to build, so reuse them across windows.
-    private static let isoFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
-    private static func isoDate(_ s: String?) -> Date? {
-        guard let s else { return nil }
-        return isoFractional.date(from: s) ?? isoPlain.date(from: s)
-    }
-
     private static func prettyPlan(_ raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         switch raw.lowercased() {
@@ -237,7 +220,7 @@ enum ClaudeClient {
     ///   1. the copy bundled inside the .app (`Resources/helpers/`) — the shipping
     ///      path, self-contained with its own `node_modules`;
     ///   2. an env override (`USAGE_METER_HELPER`) for development;
-    ///   3. a legacy Info.plist baked path, then the project checkout — so
+    ///   3. the checkout this binary was compiled from (via `#filePath`) — so
     ///      `swift run` from a dev tree still works without a bundle.
     private static func findHelper() -> URL? {
         var candidates: [String] = []
@@ -249,10 +232,11 @@ enum ClaudeClient {
         if let env = ProcessInfo.processInfo.environment["USAGE_METER_HELPER"] {
             candidates.append(env)
         }
-        if let baked = Bundle.main.object(forInfoDictionaryKey: "ClaudeHelperPath") as? String {
-            candidates.append(baked)
-        }
-        candidates.append("\(NSHomeDirectory())/projects/usage-meter/helpers/claude-usage.mjs")
+        candidates.append(
+            URL(fileURLWithPath: #filePath)  // …/Sources/UsageMeter/ClaudeClient.swift
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("helpers/claude-usage.mjs").path)
         for c in candidates where FileManager.default.fileExists(atPath: c) {
             return URL(fileURLWithPath: c)
         }

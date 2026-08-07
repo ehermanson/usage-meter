@@ -124,6 +124,21 @@ struct GeminiCredentialTests {
         #expect(token.value == "refreshed:antigravity")
     }
 
+    @Test("the winning source's credentials are reported, not a sibling's")
+    func reportsWinningSource() async throws {
+        let candidates = [
+            creds(access: "antigravity", refresh: "r1", expiresInSec: -10),  // stale, refresh fails
+            creds(access: "geminicli", refresh: "r2", expiresInSec: 3600),
+        ]
+        let token = try await GeminiClient.selectToken(
+            from: candidates, now: now, refresh: refresher())
+        // What gets persisted must be the source that produced the token —
+        // storing the stale sibling's refresh token would make every later
+        // fetch retry a dead credential first.
+        #expect(token.source.accessToken == "geminicli")
+        #expect(token.source.refreshToken == "r2")
+    }
+
     @Test("no candidates throws")
     func noCandidatesThrows() async {
         await #expect(throws: (any Error).self) {

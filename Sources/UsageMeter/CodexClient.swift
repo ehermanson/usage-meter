@@ -109,11 +109,11 @@ enum CodexClient {
 
     private static func window(from raw: Any?, fallbackLabel: String) -> UsageWindow? {
         guard let d = raw as? [String: Any] else { return nil }
-        let used = num(d["usedPercent"] ?? d["used_percent"]) ?? 0
-        let mins = num(d["windowDurationMins"] ?? d["window_minutes"] ?? d["windowMinutes"])
+        let used = Parse.num(d["usedPercent"] ?? d["used_percent"]) ?? 0
+        let mins = Parse.num(d["windowDurationMins"] ?? d["window_minutes"] ?? d["windowMinutes"])
         let label = labelFor(windowMinutes: mins, fallback: fallbackLabel)
         var reset: Date?
-        if let epoch = num(d["resetsAt"] ?? d["resets_at"]) {
+        if let epoch = Parse.num(d["resetsAt"] ?? d["resets_at"]) {
             reset = Date(timeIntervalSince1970: epoch)
         }
         return UsageWindow(label: label, usedPercent: used, resetAt: reset)
@@ -129,12 +129,6 @@ enum CodexClient {
             if m < 1440 { return "\(Int(m / 60))h" }
             return "\(Int(m / 1440))d"
         }
-    }
-
-    private static func num(_ v: Any?) -> Double? {
-        if let n = v as? NSNumber { return n.doubleValue }
-        if let s = v as? String { return Double(s) }
-        return nil
     }
 
     // MARK: - Locate the codex binary

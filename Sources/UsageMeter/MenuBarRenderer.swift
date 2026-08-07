@@ -40,7 +40,7 @@ struct MenuBarDisplay: Equatable {
 enum MenuBarRenderer {
     /// Text point size for the menu-bar title. Smaller than the ~13pt system
     /// default that a plain SwiftUI label would be clamped to.
-    static let fontSize: CGFloat = 11
+    private static let fontSize: CGFloat = 11
     private static let labelFontSize: CGFloat = 10
 
     private static let itemHeight: CGFloat = 22
