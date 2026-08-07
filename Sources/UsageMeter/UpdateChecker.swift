@@ -30,13 +30,24 @@ final class UpdateChecker {
     private let currentVersion =
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
 
-    /// Hit GitHub at most once per hour; the menu reads the cached result. A manual
-    /// re-check (force) bypasses the throttle.
+    /// Menu opens re-check at most once per 10 minutes; the menu reads the
+    /// cached result in between. A forced check bypasses the throttle.
     private var lastCheck: Date?
+    private var timer: Timer?
+
+    /// Re-check hourly in the background, so a release published while the app
+    /// sits idle still surfaces on the next menu open — without this, an
+    /// unlucky throttle window meant an update could hide until relaunch.
+    func startPeriodicChecks(interval: TimeInterval = 3600) {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+            Task { @MainActor in await UpdateChecker.shared.check(force: true) }
+        }
+    }
 
     func check(force: Bool = false) async {
         if isChecking { return }
-        if !force, let last = lastCheck, Date().timeIntervalSince(last) < 3600 { return }
+        if !force, let last = lastCheck, Date().timeIntervalSince(last) < 600 { return }
 
         isChecking = true
         defer { isChecking = false }

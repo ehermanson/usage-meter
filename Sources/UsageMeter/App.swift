@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController(store: .shared)
         UsageStore.shared.startAutoRefresh()
+        UpdateChecker.shared.startPeriodicChecks()
         Task { await UpdateChecker.shared.check() }
     }
 }
