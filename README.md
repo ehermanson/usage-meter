@@ -20,16 +20,17 @@ A tiny macOS menu-bar app showing how much of your **Claude**, **Codex**, and
   </picture>
 </p>
 
-The menu-bar title shows the highest 5-hour usage across all providers. Bars turn
-**yellow at 75%** and **red at 90%**. Two toggles in the dropdown: **Compact**
-(5-hour window only) and **Show % remaining**.
+The menu-bar title tracks one provider's 5-hour and weekly usage: by default
+whichever is closest to its limit, or pin a specific one. Bars turn **yellow at
+75%** and **red at 90%**. Dropdown options include **Compact** (title shows the
+5-hour window only), **Show % remaining**, and **Launch at Login**.
 
 ## Install
 
 1. Download **`UsageMeter.dmg`** from the [latest release](https://github.com/ehermanson/usage-meter/releases/latest).
 2. Open it, drag **Usage Meter** into **Applications**, and launch it from there.
 
-It reads usage from tools you already have — [Node.js](https://nodejs.org) and
+It reads usage from tools you already have: [Node.js](https://nodejs.org) and
 [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) (Claude), the
 [Codex CLI](https://github.com/openai/codex), and a Gemini sign-in (Antigravity
 or the Gemini CLI). Any provider that isn't set up shows a **Set up ↗** hint
@@ -49,7 +50,7 @@ each provider's windows without the UI.
 
 ## Release
 
-Push a tag — [the release workflow](.github/workflows/release.yml) builds, signs,
+Push a tag and [the release workflow](.github/workflows/release.yml) builds, signs,
 notarizes, staples, and publishes the `.dmg` and `.zip`:
 
 ```sh
