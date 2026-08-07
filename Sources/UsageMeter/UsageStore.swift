@@ -171,19 +171,59 @@ final class UsageStore {
             .max { ($0.fiveHour?.usedPercent ?? -1) < ($1.fiveHour?.usedPercent ?? -1) }
     }
 
-    /// A gauge whose needle reflects the menu-bar provider's 5hr usage.
-    /// Stays monochrome (uncolored) — only the dropdown bars use color.
-    var menuBarIcon: String {
-        guard let pct = menuBarProvider?.fiveHour?.usedPercent else {
-            return "gauge.with.dots.needle.bottom.50percent"
+    /// What the menu-bar item draws: the provider's mark inside a ring showing
+    /// its 5hr usage, then the windows as styled text runs.
+    ///
+    /// This is the visual twin of `menuBarTitle` below, which stays the flat
+    /// string — it's what VoiceOver reads and what the tests pin. The two are
+    /// built from the same `displayPercent`/`shortLabel` helpers and say the
+    /// same thing; they differ only in that the mark lets this one drop the
+    /// provider's name, which the string still has to spell out.
+    var menuBarDisplay: MenuBarDisplay {
+        guard let p = menuBarProvider else {
+            return MenuBarDisplay(
+                fraction: 0, severity: 0, logoResource: nil,
+                segments: [MenuBarSegment(text: "—", style: .label)])
         }
-        switch pct {
-        case ..<20: return "gauge.with.dots.needle.0percent"
-        case ..<40: return "gauge.with.dots.needle.33percent"
-        case ..<60: return "gauge.with.dots.needle.50percent"
-        case ..<80: return "gauge.with.dots.needle.67percent"
-        default: return "gauge.with.dots.needle.100percent"
+        let logo = style(for: p.name).logoResource
+
+        var values: [MenuBarSegment] = []
+        if let f = p.fiveHour {
+            values.append(MenuBarSegment(text: Self.shortLabel(f.label), style: .label))
+            values.append(
+                MenuBarSegment(text: Format.percent(displayPercent(f)), style: .primary))
         }
+        if !compactMenuBar, let w = p.weekly, w.id != p.fiveHour?.id {
+            values.append(MenuBarSegment(text: Self.shortLabel(w.label), style: .label))
+            values.append(
+                MenuBarSegment(text: Format.percent(displayPercent(w)), style: .secondary))
+        }
+
+        // A fixed-budget plan's lone "Usage" window isn't self-describing the
+        // way "5h 7% · Wk 31%" is, so say which way its number runs.
+        let isFixedBudget = values.count == 2 && p.fiveHour?.label == "Usage"
+        if isFixedBudget && showRemaining {
+            values.append(MenuBarSegment(text: "left", style: .label))
+        }
+
+        var segments: [MenuBarSegment] = []
+        // The mark already says which provider this is, so the name is only
+        // spelled out when there's no logo to carry it.
+        if logo == nil, values.isEmpty || selectableProviders.count > 1 || isFixedBudget {
+            segments.append(MenuBarSegment(text: p.name, style: .label))
+        }
+        segments.append(contentsOf: values)
+
+        // The ring tracks whatever the numbers say — filling with usage, or
+        // draining as headroom shrinks — while its color always keys off usage,
+        // so a nearly-drained ring still reads red. Same split the dropdown's
+        // bars use (see `WindowBar.barFraction` / `barColor`).
+        let used = (p.fiveHour?.usedPercent ?? 0) / 100
+        return MenuBarDisplay(
+            fraction: showRemaining ? 1 - used : used,
+            severity: used,
+            logoResource: logo,
+            segments: segments)
     }
 
     /// Full: "Claude  5h 7% · Wk 31%". Compact: "Claude  5h 7%". A provider with

@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import QuartzCore
 import SwiftUI
 
 /// Owns the menu-bar item and the dropdown panel, and—crucially—computes the
@@ -27,6 +28,29 @@ final class StatusBarController {
     /// Keep the panel this far from the screen's left/right/bottom edges.
     private let edgeMargin: CGFloat = 8
 
+    /// True while the panel is open, so the item can draw in its inverted
+    /// (highlighted) appearance. The menu-bar image is not a template, so this
+    /// inversion is ours to do — see `ink`.
+    private var isHighlighted = false
+
+    /// How the ring is drawn right now, eased toward the store's real values.
+    /// Arc length and color travel together on one timer, so the color can't
+    /// land on its final shade while the arc is still halfway there. Starting at
+    /// zero makes the first data of the session sweep up from empty.
+    private var ringFraction: Double = 0
+    private var ringSeverity: Double = 0
+    private var ringAnimation: RingAnimation?
+    private var ringTimer: Timer?
+    private let ringDuration: CFTimeInterval = 0.55
+
+    private struct RingAnimation {
+        let fromFraction: Double
+        let toFraction: Double
+        let fromSeverity: Double
+        let toSeverity: Double
+        let startedAt: CFTimeInterval
+    }
+
     init(store: UsageStore) {
         self.store = store
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -36,6 +60,12 @@ final class StatusBarController {
 
         configureButton()
         observeMenuBar()
+        observeAppearance()
+
+        // Sweep the ring up from empty to whatever the store already has (the
+        // last-good snapshot seeded from disk), so launch reads as the meter
+        // filling rather than as a value appearing from nowhere.
+        animateRing(to: store.menuBarDisplay)
 
         // Re-place the panel whenever the SwiftUI content changes height (async
         // refresh, the update row appearing) so the top stays anchored under the
@@ -75,11 +105,86 @@ final class StatusBarController {
                 NSApplication.shared.terminate(nil)
             }
         }
+
+        // `--snapshot-item <path>` does the same for the menu-bar item itself.
+        if let i = args.firstIndex(of: "--snapshot-item"), args.indices.contains(i + 1) {
+            let path = args[i + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+                guard let self else { return }
+                do {
+                    try self.snapshotItem(to: path)
+                } catch {
+                    FileHandle.standardError.write(
+                        Data("snapshot-item failed (\(path)): \(error)\n".utf8))
+                    exit(EXIT_FAILURE)
+                }
+                NSApplication.shared.terminate(nil)
+            }
+        }
+    }
+
+    /// This object lives as long as the app, so teardown is belt-and-braces —
+    /// but an orphaned repeating timer would keep firing against a dead ease,
+    /// and it costs one line to rule out. The appearance probe needs no cleanup:
+    /// the button owns it, and it only holds a weak reference back.
+    deinit {
+        ringTimer?.invalidate()
     }
 
     private enum SnapshotError: Error {
         case captureUnavailable  // no content view / no bitmap rep
         case pngEncodingFailed
+    }
+
+    /// Writes the menu-bar item art to `path` as a light/dark/highlighted strip.
+    ///
+    /// Same reason `--snapshot` exists: the status item can't be screenshotted
+    /// without screen-recording permission. Since the art is hand-drawn and not
+    /// a template, this is the only way to see all three ink states — the ones
+    /// AppKit would otherwise have handled — actually rendered.
+    private func snapshotItem(to path: String) throws {
+        let display = animatedDisplay
+        let variants: [(NSColor, NSColor)] = [
+            (NSColor(srgbRed: 0.93, green: 0.93, blue: 0.94, alpha: 1), .black),
+            (NSColor(srgbRed: 0.16, green: 0.16, blue: 0.18, alpha: 1), .white),
+            (NSColor(srgbRed: 0.28, green: 0.30, blue: 0.34, alpha: 1), .white),
+        ]
+        let images = variants.map { MenuBarRenderer.image(display, ink: $0.1) }
+        let cell = NSSize(width: (images.map(\.size.width).max() ?? 40) + 32, height: 34)
+        let size = NSSize(width: cell.width * CGFloat(variants.count), height: cell.height)
+
+        // Oversampled so 11pt text and a 2.2pt stroke are legible when the PNG is
+        // viewed at 1:1. Named so the pixel dimensions and `rep.size` can't drift.
+        let scale: CGFloat = 3
+        guard
+            let rep = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale),
+                pixelsHigh: Int(size.height * scale), bitsPerSample: 8, samplesPerPixel: 4,
+                hasAlpha: true, isPlanar: false, colorSpaceName: .calibratedRGB,
+                bytesPerRow: 0, bitsPerPixel: 0)
+        else { throw SnapshotError.captureUnavailable }
+        rep.size = size
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        for (index, variant) in variants.enumerated() {
+            let frame = NSRect(
+                x: cell.width * CGFloat(index), y: 0, width: cell.width, height: cell.height)
+            variant.0.setFill()
+            frame.fill()
+            let image = images[index]
+            image.draw(
+                in: NSRect(
+                    x: frame.midX - image.size.width / 2, y: frame.midY - image.size.height / 2,
+                    width: image.size.width, height: image.size.height),
+                from: .zero, operation: .sourceOver, fraction: 1)
+        }
+        NSGraphicsContext.restoreGraphicsState()
+
+        guard let data = rep.representation(using: .png, properties: [:]) else {
+            throw SnapshotError.pngEncodingFailed
+        }
+        try data.write(to: URL(fileURLWithPath: path))
     }
 
     /// Renders the panel's content view into a PNG at `path`.
@@ -98,26 +203,133 @@ final class StatusBarController {
 
     private func configureButton() {
         guard let button = statusItem.button else { return }
-        button.image = MenuBarRenderer.image(icon: store.menuBarIcon, title: store.menuBarTitle)
         button.imagePosition = .imageOnly
         button.target = self
         button.action = #selector(togglePanel)
+        render()
+    }
+
+    /// The color the mark and text are drawn in.
+    ///
+    /// A template image would get this for free, but the ring carries a usage
+    /// color and template mode would flatten it, so both cases are handled here.
+    /// The menu bar has its own appearance — it can be dark while the app is
+    /// light — so this reads the button's `effectiveAppearance` rather than the
+    /// app's. While the panel is open AppKit draws a dark highlight behind the
+    /// item in both appearances, and the content inverts to white against it.
+    private var ink: NSColor {
+        if isHighlighted { return .white }
+        let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return isDark ? .white : .black
+    }
+
+    /// The store's display with the ring swapped for wherever the ease has got
+    /// to. The segments stay as-is, so the text never lags the real numbers.
+    private var animatedDisplay: MenuBarDisplay {
+        var display = store.menuBarDisplay
+        display.fraction = ringFraction
+        display.severity = ringSeverity
+        return display
+    }
+
+    private func render() {
+        guard let button = statusItem.button else { return }
+        button.image = MenuBarRenderer.image(animatedDisplay, ink: ink)
+        // The image carries no text AppKit can read, so the flat title is the
+        // accessible label.
+        button.setAccessibilityLabel(store.menuBarTitle)
     }
 
     /// Keep the menu-bar image in sync with the store. `@Observable` fires
     /// `onChange` once before each mutation, so we re-register to keep tracking.
     private func observeMenuBar() {
         withObservationTracking {
-            _ = store.menuBarIcon
+            _ = store.menuBarDisplay
             _ = store.menuBarTitle
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
-                self.statusItem.button?.image = MenuBarRenderer.image(
-                    icon: self.store.menuBarIcon, title: self.store.menuBarTitle)
+                self.animateRing(to: self.store.menuBarDisplay)
+                self.render()
                 self.observeMenuBar()
             }
         }
+    }
+
+    /// Re-render whenever the item's appearance changes.
+    ///
+    /// Watching for a light/dark *theme* switch isn't enough: since Big Sur the
+    /// menu bar takes its appearance from the desktop picture, so a light-mode
+    /// user with a dark wallpaper gets a dark menu bar — `effectiveAppearance`
+    /// on the button becomes `.darkAqua` and no theme notification ever fires.
+    /// Changing the wallpaper or dragging the item to a display with a different
+    /// appearance are the same story. Since the image isn't a template, missing
+    /// any of those means drawing black on dark until the next refresh happens
+    /// to re-render — an effectively invisible menu-bar item.
+    ///
+    /// So let AppKit say when it changed, via the one hook that covers every
+    /// cause: a zero-sized view parented to the button, which inherits the
+    /// button's appearance and is told each time it resolves differently.
+    private func observeAppearance() {
+        guard let button = statusItem.button else { return }
+        let probe = AppearanceProbeView()
+        probe.onAppearanceChange = { [weak self] in self?.render() }
+        button.addSubview(probe)
+    }
+
+    // MARK: - Ring animation
+
+    /// Ease the ring to a new state. Only the ring moves — the text shows the
+    /// real number immediately, because a percentage counting upward in the menu
+    /// bar reads as data churning rather than as a transition.
+    ///
+    /// Each frame re-rasterizes the item and reassigns `button.image`, so this
+    /// runs only across a change and stops at the end. Nothing animates at rest:
+    /// a permanent loop would keep the app awake for a decoration.
+    private func animateRing(to display: MenuBarDisplay) {
+        let fraction = max(0, min(1, display.fraction))
+        let severity = max(0, min(1, display.severity))
+        guard abs(fraction - ringFraction) > 0.001 || abs(severity - ringSeverity) > 0.001
+        else { return }
+
+        ringAnimation = RingAnimation(
+            fromFraction: ringFraction, toFraction: fraction,
+            fromSeverity: ringSeverity, toSeverity: severity,
+            startedAt: CACurrentMediaTime())
+        guard ringTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.stepRing() }
+        }
+        // `.common` rather than the default mode: a refresh can land while the
+        // user is dragging a window or holding a native menu open, and in those
+        // tracking modes a default-mode timer stops firing — the ease would
+        // freeze mid-sweep and then snap when tracking ended.
+        RunLoop.main.add(timer, forMode: .common)
+        ringTimer = timer
+    }
+
+    private func stepRing() {
+        guard let animation = ringAnimation else { return stopRingAnimation() }
+        let progress = min(1, (CACurrentMediaTime() - animation.startedAt) / ringDuration)
+        // Ease-out cubic: quick off the mark, settling gently onto the value.
+        let eased = 1 - pow(1 - progress, 3)
+        ringFraction =
+            animation.fromFraction + (animation.toFraction - animation.fromFraction) * eased
+        ringSeverity =
+            animation.fromSeverity + (animation.toSeverity - animation.fromSeverity) * eased
+        render()
+        if progress >= 1 {
+            ringFraction = animation.toFraction
+            ringSeverity = animation.toSeverity
+            stopRingAnimation()
+        }
+    }
+
+    private func stopRingAnimation() {
+        ringTimer?.invalidate()
+        ringTimer = nil
+        ringAnimation = nil
     }
 
     // MARK: - Show / hide
@@ -133,6 +345,8 @@ final class StatusBarController {
         positionPanel()
         panel.makeKeyAndOrderFront(nil)
         statusItem.button?.highlight(true)
+        isHighlighted = true
+        render()
 
         // Close the panel on any click outside of it.
         eventMonitor = NSEvent.addGlobalMonitorForEvents(
@@ -145,6 +359,8 @@ final class StatusBarController {
     private func hide() {
         panel.orderOut(nil)
         statusItem.button?.highlight(false)
+        isHighlighted = false
+        render()
         if let eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
             self.eventMonitor = nil
@@ -241,6 +457,20 @@ final class StatusBarController {
             vev.addSubview(content)
             return vev
         }
+    }
+}
+
+/// A zero-sized view whose only job is to report appearance changes. Parented to
+/// the status-item button, it inherits the button's appearance, so AppKit calls
+/// `viewDidChangeEffectiveAppearance` for every cause — theme switch, wallpaper
+/// making the menu bar dark in light mode, or a move to another display. Zero
+/// frame so it can't affect layout or swallow the button's clicks.
+private final class AppearanceProbeView: NSView {
+    var onAppearanceChange: (() -> Void)?
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        onAppearanceChange?()
     }
 }
 

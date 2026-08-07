@@ -93,50 +93,13 @@ struct ProviderRow: View {
         }
     }
 
-    /// The provider's bundled brand logo, loaded once as a tintable template image.
+    /// The provider's bundled brand logo, loaded once as a tintable template
+    /// image. Shared with the menu-bar renderer via `BrandLogo`.
     private var logoImage: NSImage? {
         guard let logoResource else { return nil }
-        return ProviderRow.logo(named: logoResource)
+        return BrandLogo.image(named: logoResource)
     }
-
-    private static func logo(named resource: String) -> NSImage? {
-        if let cached = logoCache[resource] { return cached }
-        guard let bundle = resourceBundle,
-            let url = bundle.url(forResource: resource, withExtension: "png"),
-            let image = NSImage(contentsOf: url)
-        else { return nil }
-        image.isTemplate = true
-        logoCache[resource] = image
-        return image
-    }
-
-    private static var logoCache: [String: NSImage] = [:]
-
-    /// Locates the SwiftPM resource bundle ourselves instead of using the
-    /// generated `Bundle.module`, which looks for the bundle at the `.app` root
-    /// and otherwise `fatalError`s against a build-machine path baked in at
-    /// compile time — crashing every installed copy. In a packaged app the
-    /// bundle sits in `Contents/Resources`; in dev it's next to the executable.
-    private static let resourceBundle: Bundle? = {
-        let name = "UsageMeter_UsageMeter.bundle"
-        let bases = [
-            Bundle.main.resourceURL,
-            Bundle.main.bundleURL,
-            Bundle(for: BundleToken.self).resourceURL,
-            Bundle(for: BundleToken.self).bundleURL,
-        ]
-        for base in bases {
-            if let url = base?.appendingPathComponent(name),
-                let bundle = Bundle(url: url)
-            {
-                return bundle
-            }
-        }
-        return nil
-    }()
 }
-
-private final class BundleToken {}
 
 private extension VerticalAlignment {
     /// Aligns on a single line of text's optical (cap-height) center rather than
