@@ -4,6 +4,7 @@ struct MenuContentView: View {
     @Bindable var store: UsageStore
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var updates = UpdateChecker.shared
+    @State private var installer = UpdateInstaller.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -33,7 +34,7 @@ struct MenuContentView: View {
             settingsCard
 
             if let update = updates.availableUpdate {
-                updateRow(version: update.version)
+                updateRow(update)
             }
 
             footer
@@ -200,18 +201,99 @@ struct MenuContentView: View {
                 + "Auto works for most setups.")
     }
 
-    // Shown only when GitHub has a release newer than this build. Clicking opens
-    // the .dmg download — the lightweight update path (no in-place swap).
-    private func updateRow(version: String) -> some View {
-        Button {
-            updates.openDownload()
+    // Shown only when GitHub has a release newer than this build. One click
+    // runs the whole seamless flow inline — download progress, install,
+    // relaunch — via UpdateInstaller. When an in-place swap isn't possible
+    // (dev build, unwritable install, no zip asset) or it fails, the row
+    // degrades to the browser download.
+    @ViewBuilder
+    private func updateRow(_ update: AvailableUpdate) -> some View {
+        switch installer.phase {
+        case .idle:
+            updateButton(update)
+        case .downloading(let fraction):
+            HStack(alignment: .bottom, spacing: 8) {
+                updateProgress("Downloading v\(update.version)…", fraction: fraction)
+                Button {
+                    installer.cancelDownload()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help("Cancel the download")
+            }
+        case .installing:
+            updateProgress("Installing…", fraction: nil)
+        case .relaunching:
+            updateProgress("Relaunching…", fraction: nil)
+        case .installedNeedsRestart:
+            // The swap already succeeded; only the auto-relaunch didn't start.
+            VStack(alignment: .leading, spacing: 3) {
+                Label("v\(update.version) installed", systemImage: "checkmark.circle")
+                    .font(.system(size: 11, weight: .medium))
+                Text("Quit and reopen Usage Meter to finish.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Button("Quit Now") { NSApplication.shared.terminate(nil) }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .font(.system(size: 11))
+            }
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await installer.install(update) }
+                    } label: {
+                        Label("Try Again", systemImage: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    Button {
+                        updates.openDownload()
+                    } label: {
+                        Label("Download v\(update.version)", systemImage: "arrow.down.circle")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                Text("Couldn't auto-update: \(message)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func updateButton(_ update: AvailableUpdate) -> some View {
+        let seamless = update.zipURL != nil && installer.canInstallInPlace
+        return Button {
+            if seamless {
+                Task { await installer.install(update) }
+            } else {
+                updates.openDownload()
+            }
         } label: {
-            Label("Update to v\(version)", systemImage: "arrow.down.circle")
+            Label("Update to v\(update.version)", systemImage: "arrow.down.circle")
                 .font(.system(size: 11, weight: .medium))
         }
         .buttonStyle(.borderless)
         .controlSize(.small)
-        .help("Download the latest Usage Meter from GitHub")
+        .help(
+            seamless
+                ? "Downloads, installs, and relaunches — nothing else to do"
+                : "Download the latest Usage Meter from GitHub")
+    }
+
+    private func updateProgress(_ label: String, fraction: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+            ProgressView(value: fraction)
+                .progressViewStyle(.linear)
+                .controlSize(.small)
+        }
     }
 
     private var footer: some View {

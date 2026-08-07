@@ -1,18 +1,26 @@
 import AppKit
 import Observation
 
-/// Checks GitHub Releases for a newer build and, when one exists, surfaces a
-/// one-click link to its download. This is the lightweight "tell me there's an
-/// update" path — it opens the `.dmg` in the browser rather than swapping the
-/// app in place. The repo is public, so the API call needs no auth.
+/// What `UpdateChecker` found on GitHub: the new version plus where to get it.
+/// `zipURL` feeds `UpdateInstaller`'s in-place install; `fallbackURL` is the
+/// browser path (the `.dmg`, or the release page when no asset exists).
+struct AvailableUpdate: Equatable {
+    let version: String
+    let zipURL: URL?
+    let fallbackURL: URL
+}
+
+/// Checks GitHub Releases for a newer build and, when one exists, surfaces it
+/// to the menu. The seamless path hands the notarized `.zip` to
+/// `UpdateInstaller`; when that's not possible the menu falls back to opening
+/// the `.dmg` in the browser. The repo is public, so the API call needs no auth.
 @MainActor
 @Observable
 final class UpdateChecker {
     static let shared = UpdateChecker()
 
-    /// Set when a release newer than the running bundle is published. `url` is the
-    /// `.dmg` asset if one exists, otherwise the release page.
-    private(set) var availableUpdate: (version: String, url: URL)?
+    /// Set when a release newer than the running bundle is published.
+    private(set) var availableUpdate: AvailableUpdate?
     private(set) var isChecking = false
 
     private let latestReleaseURL = URL(
@@ -48,12 +56,12 @@ final class UpdateChecker {
                 return
             }
 
-            let dmg = release.assets.first { $0.name.hasSuffix(".dmg") }
-            let target =
-                dmg.flatMap { URL(string: $0.browserDownloadURL) }
-                ?? URL(string: release.htmlURL)
-            if let target {
-                availableUpdate = (version: latest, url: target)
+            let targets = Self.downloadTargets(
+                assets: release.assets.map { ($0.name, $0.browserDownloadURL) },
+                releasePage: release.htmlURL)
+            if let targets {
+                availableUpdate = AvailableUpdate(
+                    version: latest, zipURL: targets.zip, fallbackURL: targets.fallback)
             }
         } catch {
             // Network hiccups are non-fatal: just leave the cached state untouched.
@@ -61,8 +69,28 @@ final class UpdateChecker {
     }
 
     func openDownload() {
-        guard let url = availableUpdate?.url else { return }
+        guard let url = availableUpdate?.fallbackURL else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    /// Split a release's assets into the two download paths: the notarized app
+    /// zip (in-place install) and a browser fallback (.dmg, else the release
+    /// page). The zip is matched by exact name so a stray archive on the
+    /// release (dSYMs.zip, symbols) can never reach the installer.
+    nonisolated static func downloadTargets(
+        assets: [(name: String, url: String)], releasePage: String
+    ) -> (zip: URL?, fallback: URL)? {
+        let zip = assets.first { $0.name == "UsageMeter.zip" }.flatMap { URL(string: $0.url) }
+        let dmg = assets.first { $0.name.hasSuffix(".dmg") }.flatMap { URL(string: $0.url) }
+        guard let fallback = dmg ?? URL(string: releasePage) else { return nil }
+        return (zip, fallback)
+    }
+
+    /// True when two versions are numerically equal, so "1.3" matches "1.3.0".
+    /// The installer uses this to confirm the unpacked bundle is the release
+    /// it asked for.
+    nonisolated static func isSameVersion(_ a: String, _ b: String) -> Bool {
+        !isNewer(a, than: b) && !isNewer(b, than: a)
     }
 
     /// Numeric, component-wise semver compare. Missing components count as 0, so
