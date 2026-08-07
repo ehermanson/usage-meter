@@ -30,6 +30,10 @@ whichever is closest to its limit, or pin a specific one. Bars turn **yellow at
 1. Download **`UsageMeter.dmg`** from the [latest release](https://github.com/ehermanson/usage-meter/releases/latest).
 2. Open it, drag **Usage Meter** into **Applications**, and launch it from there.
 
+That's the last time you'll touch a DMG: when a new release ships, the dropdown
+shows an **Update to vX** button that downloads, verifies, installs, and
+relaunches in place with one click.
+
 It reads usage from tools you already have: [Node.js](https://nodejs.org) and
 [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) (Claude), the
 [Codex CLI](https://github.com/openai/codex), and a Gemini sign-in (Antigravity
@@ -58,6 +62,12 @@ git tag v1.2.0 && git push origin v1.2.0
 ```
 
 The one-time signing secrets are documented at the top of that workflow file.
+
+The `.zip` also feeds the in-app updater, which matches the asset by its exact
+name (`UsageMeter.zip`) and verifies the download's code signature against the
+app's Developer ID team before installing. Renaming that asset or changing the
+signing identity won't break anything visibly — updates just silently fall back
+to the browser download.
 
 ## License
 
