@@ -84,6 +84,12 @@ final class UpdateInstaller {
 
             // Past this point the new build is on disk; failures must not send
             // the user to a redundant second install.
+            //
+            // Clean staging here as well as in the defer: the relaunch path
+            // exits the process from inside `terminate`, so the defer never
+            // runs after a *successful* install and every update would leak a
+            // ~10 MB zip in the temp directory.
+            try? FileManager.default.removeItem(at: staging)
             phase = .relaunching
             do {
                 try relaunch(installed)
@@ -159,8 +165,17 @@ final class UpdateInstaller {
         }
 
         let flags = SecCSFlags(rawValue: UInt32(kSecCSCheckAllArchitectures | kSecCSStrictValidate))
-        guard SecStaticCodeCheckValidityWithErrors(code, flags, req, nil) == errSecSuccess else {
-            throw InstallError.verificationFailed("signature doesn't match this app's developer")
+        var validityError: Unmanaged<CFError>?
+        guard SecStaticCodeCheckValidityWithErrors(code, flags, req, &validityError) == errSecSuccess
+        else {
+            // Surface the framework's actual reason (requirement not met, broken
+            // resource seal, …) instead of a bare guess — when a release asset
+            // is bad, the message in the menu is the only diagnostic anyone sees.
+            let detail = (validityError?.takeRetainedValue() as Error?)?.localizedDescription
+            NSLog("[UsageMeter] update verification failed: %@", detail ?? "no detail")
+            throw InstallError.verificationFailed(
+                "signature doesn't match this app's developer"
+                    + (detail.map { " — \($0)" } ?? ""))
         }
     }
 
