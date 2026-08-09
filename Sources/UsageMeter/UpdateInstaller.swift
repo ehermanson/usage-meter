@@ -166,7 +166,8 @@ final class UpdateInstaller {
 
         let flags = SecCSFlags(rawValue: UInt32(kSecCSCheckAllArchitectures | kSecCSStrictValidate))
         var validityError: Unmanaged<CFError>?
-        guard SecStaticCodeCheckValidityWithErrors(code, flags, req, &validityError) == errSecSuccess
+        guard
+            SecStaticCodeCheckValidityWithErrors(code, flags, req, &validityError) == errSecSuccess
         else {
             // Surface the framework's actual reason (requirement not met, broken
             // resource seal, …) instead of a bare guess — when a release asset
