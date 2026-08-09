@@ -185,6 +185,7 @@ enum GeminiClient {
         if let cachedToken, cachedToken.expiry.timeIntervalSinceNow > 120 {
             return cachedToken.value
         }
+        awaitingKeychainApproval = false
         let refresher: (Credentials, String) async throws -> (value: String, expiry: Date) = {
             creds, refreshToken in
             try await refresh(
@@ -201,6 +202,17 @@ enum GeminiClient {
             }
         }
         let candidates = sources.compactMap { $0() }
+        // No candidates *and* a read still sitting behind an approval dialog is
+        // a different story from no candidates at all: the credentials probably
+        // do exist, they just can't be read until someone answers. Say that,
+        // rather than reporting a timeout the user can't act on — or worse,
+        // deciding Gemini isn't set up and hiding the section outright.
+        if candidates.isEmpty, awaitingKeychainApproval {
+            throw GeminiError(
+                "Needs Keychain access to read your Gemini sign-in. "
+                    + "Approve the macOS prompt, or allow Usage Meter in Keychain Access.",
+                retryable: true, setupNeeded: true)
+        }
         let token = try await selectToken(from: candidates, now: Date(), refresh: refresher)
         cachedToken = (token.value, token.expiry)
         // Copy the *winning* source's refresh token into our own item so the next
@@ -280,21 +292,83 @@ enum GeminiClient {
         return (access, Date().addingTimeInterval(expiresIn))
     }
 
+    /// Outcome of a Keychain read. `awaitingApproval` is the case worth naming:
+    /// the item is there, but macOS is holding the read behind an authorization
+    /// dialog nobody has answered. It looks identical to "missing" from the
+    /// return value alone, and telling them apart is the difference between a
+    /// row that says "timed out" and one that says what to actually do.
+    enum KeychainRead: Equatable {
+        case found(Data)
+        /// `errSecItemNotFound` — the sign-in genuinely isn't on this machine.
+        case absent
+        /// The item is there but unreadable: a prompt nobody answered, or access
+        /// refused. Distinct from `absent` because it must *not* be read as "the
+        /// user doesn't use Gemini" — that hides the section and explains nothing.
+        case unavailable
+    }
+
+    /// Reads a Keychain item, giving up if the read doesn't return promptly.
+    ///
+    /// A local Keychain read is sub-millisecond; the *only* thing that makes one
+    /// take seconds is an authorization prompt waiting on the user. So a short
+    /// deadline here is a reliable detector rather than a guess, and it doubles
+    /// as protection against `SecItemCopyMatching` blocking forever — it isn't
+    /// cancellable, so the abandoned read is left to finish on its own.
+    static func keychainRead(service: String, account: String) -> KeychainRead {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        let done = DispatchSemaphore(value: 0)
+        let result = ReadBox()
+        DispatchQueue.global(qos: .userInitiated).async {
+            var item: CFTypeRef?
+            result.status = SecItemCopyMatching(query as CFDictionary, &item)
+            result.data = item as? Data
+            done.signal()
+        }
+        guard done.wait(timeout: .now() + keychainTimeout) == .success else {
+            awaitingKeychainApproval = true
+            return .unavailable
+        }
+        if result.status == errSecSuccess, let data = result.data {
+            return .found(data)
+        }
+        // Only a genuine "no such item" means Gemini isn't set up here. Anything
+        // else — access denied, interaction not allowed, a cancelled prompt — is
+        // a readable item we were refused, and saying so beats disappearing.
+        guard result.status == errSecItemNotFound else {
+            awaitingKeychainApproval = true
+            return .unavailable
+        }
+        return .absent
+    }
+
+    /// A normal Keychain read is sub-millisecond. Anything approaching this is an
+    /// authorization dialog waiting on the user, so the deadline doubles as the
+    /// detector — generous by three orders of magnitude, still quick to give up.
+    private static let keychainTimeout: TimeInterval = 2
+
+    /// Set when any read in the current attempt gave up waiting on a dialog, so
+    /// `accessToken()` can tell "no credentials here" from "can't get at them
+    /// yet". Reset at the start of each attempt rather than accumulating.
+    private static var awaitingKeychainApproval = false
+
+    /// Carries the read across the semaphore hand-off.
+    private final class ReadBox: @unchecked Sendable {
+        var status: OSStatus = errSecSuccess
+        var data: Data?
+    }
+
     /// Antigravity CLI: macOS Keychain item (service "gemini", account
     /// "antigravity"), a `go-keyring-base64:`-prefixed base64 of JSON
     /// `{ "token": { access_token, refresh_token, expiry } }`. The first read
     /// prompts the user to grant Keychain access (the item is owned by the CLI).
     private static func antigravityCredentials() -> Credentials? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "gemini",
-            kSecAttrAccount as String: "antigravity",
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-            let data = item as? Data,
+        guard case .found(let data) = keychainRead(service: "gemini", account: "antigravity"),
             var string = String(data: data, encoding: .utf8)
         else { return nil }
         let prefix = "go-keyring-base64:"
@@ -313,18 +387,13 @@ enum GeminiClient {
     }
 
     /// Reads the credentials we previously copied into our own Keychain item.
-    /// We created this item, so the read is implicitly trusted and never prompts.
+    ///
+    /// Normally trusted and prompt-free, since we created the item — but the ACL
+    /// is bound to the code signature, so a re-signed build (any dev rebuild, and
+    /// in principle a re-signed release) reads as a different app and gets the
+    /// prompt anyway. Bounded for exactly that reason.
     private static func ownCredentials() -> Credentials? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: ownService,
-            kSecAttrAccount as String: ownAccount,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-            let data = item as? Data,
+        guard case .found(let data) = keychainRead(service: ownService, account: ownAccount),
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let refresh = json["refresh_token"] as? String,
             let clientID = json["client_id"] as? String,

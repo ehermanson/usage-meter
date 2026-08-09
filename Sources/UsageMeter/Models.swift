@@ -76,6 +76,10 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
 
     var hasWindows: Bool { !allWindows.isEmpty }
 
+    /// True when the weekly window is a separate thing from the 5hr one, so
+    /// showing both says more than showing one.
+    var hasDistinctWeekly: Bool { weekly != nil && weekly?.id != fiveHour?.id }
+
     static func ok(_ name: String, pools: [UsagePool], plan: String? = nil) -> ProviderUsage {
         ProviderUsage(name: name, pools: pools, error: nil, plan: plan)
     }

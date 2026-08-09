@@ -37,12 +37,24 @@ protocol UsageProvider: Sendable {
     var logoResource: String? { get }
     /// How often this source may be probed.
     var throttle: ThrottlePolicy { get }
+    /// Hard cap on a single `fetch()`. Past this the store stops waiting and
+    /// treats the provider as a retryable failure.
+    ///
+    /// Every provider already bounds its own subprocess or HTTP call, but those
+    /// aren't the only ways a fetch can block: reading a sign-in tool's Keychain
+    /// item puts up an authorization prompt, and `SecItemCopyMatching` simply
+    /// waits — forever, if nobody answers it. This is the backstop for anything
+    /// the individual clients don't (or can't) time out themselves.
+    var fetchTimeout: TimeInterval { get }
     func fetch() async -> ProviderUsage
 }
 
 extension UsageProvider {
     var logoResource: String? { nil }
     var throttle: ThrottlePolicy { .eager }
+    /// Comfortably past any inner timeout a client sets for itself, so this only
+    /// ever fires for a genuine hang rather than cutting a slow fetch short.
+    var fetchTimeout: TimeInterval { 45 }
 }
 
 /// Claude — driven through the Claude Agent SDK's get_usage control request via a
@@ -53,6 +65,9 @@ struct ClaudeProvider: UsageProvider {
     let accent = Color.orange
     let logoResource: String? = "claude-logo"
     let throttle = ThrottlePolicy(successInterval: 300, backoffBase: 180, backoffMax: 900)
+    /// Above the helper's own 75s subprocess watchdog, so a legitimately slow
+    /// config-dir probe finishes rather than being cut off here.
+    let fetchTimeout: TimeInterval = 90
     func fetch() async -> ProviderUsage { await ClaudeClient.fetch() }
 }
 

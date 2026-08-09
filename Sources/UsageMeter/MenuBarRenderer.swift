@@ -13,8 +13,31 @@ struct MenuBarSegment: Equatable {
     let style: Style
 }
 
-/// Everything the menu-bar item draws.
-struct MenuBarDisplay: Equatable {
+/// How much the menu-bar item spells out. The first three track a single
+/// provider; the last drops the text and shows every provider at once.
+enum MenuBarStyle: String, CaseIterable, Identifiable {
+    case full  // ring, 5hr and weekly
+    case compact  // ring and 5hr
+    case ringOnly  // ring alone, numbers in the tooltip
+    case allProviders  // one ring per provider
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .full: "5hr and weekly"
+        case .compact: "5hr only"
+        case .ringOnly: "Ring only"
+        case .allProviders: "Ring per provider"
+        }
+    }
+}
+
+/// One ring, with the brand mark that sits inside it.
+struct MenuBarGlyph: Equatable, Identifiable {
+    /// The provider's name — stable across refreshes, so an easing ring stays
+    /// matched to its provider even as the set of them changes.
+    let id: String
     /// How much of the ring is stroked, 0...1. This follows whatever the numbers
     /// say: it grows with usage by default, and drains battery-style when the
     /// user asks for headroom left, matching the dropdown's bars.
@@ -25,6 +48,11 @@ struct MenuBarDisplay: Equatable {
     var severity: Double
     /// Brand mark drawn inside the ring, or nil to leave the ring empty.
     var logoResource: String?
+}
+
+/// Everything the menu-bar item draws: the rings, then the text.
+struct MenuBarDisplay: Equatable {
+    var glyphs: [MenuBarGlyph]
     var segments: [MenuBarSegment]
 }
 
@@ -51,6 +79,10 @@ enum MenuBarRenderer {
     /// opening used to leave air; trimming the mark puts that clearance back.
     private static let logoDiameter: CGFloat = 10
     private static let glyphTextGap: CGFloat = 6
+    /// Between adjacent rings when every provider is shown at once. Tighter than
+    /// the gap before text, so the rings read as one group rather than as
+    /// separate menu-bar items.
+    private static let glyphGap: CGFloat = 4
 
     /// Gap before a segment that starts a new label/value group, versus the
     /// tighter gap between a label and the value it belongs to.
@@ -76,12 +108,24 @@ enum MenuBarRenderer {
         // movement. Slots are measured once and reused when drawing.
         let slots = display.segments.map { ceil(attributed($0.widest, ink: ink).size().width) }
         let textWidth = zip(gaps, slots).reduce(0) { $0 + $1.0 + $1.1 }
-        let width = glyphDiameter + (textWidth > 0 ? glyphTextGap + textWidth : 0)
 
-        // Resolve the mark up front rather than inside the handler below: AppKit
+        let glyphCount = CGFloat(display.glyphs.count)
+        let glyphsWidth =
+            display.glyphs.isEmpty
+            ? 0 : glyphCount * glyphDiameter + (glyphCount - 1) * glyphGap
+        // The glyph-to-text gap only exists when there is both a glyph and text
+        // to separate. Adding it unconditionally left dead space on the right of
+        // a ring-only item — invisible until the highlight capsule drew around
+        // it and sat visibly off-centre.
+        let textStart = glyphsWidth + (glyphsWidth > 0 && textWidth > 0 ? glyphTextGap : 0)
+        let width = textStart + textWidth
+
+        // Resolve the marks up front rather than inside the handler below: AppKit
         // may run a drawing handler off the main thread, and `BrandLogo`'s caches
         // are main-actor state. Everything the handler touches is now local.
-        let mark = display.logoResource.flatMap { BrandLogo.tinted($0, ink) }
+        let marks = display.glyphs.map { glyph in
+            glyph.logoResource.flatMap { BrandLogo.tinted($0, ink) }
+        }
 
         // `drawingHandler` re-runs per backing scale, so the ring stays crisp
         // when the menu bar moves between a Retina and a non-Retina display.
@@ -89,9 +133,13 @@ enum MenuBarRenderer {
         let image = NSImage(
             size: NSSize(width: max(width, 1), height: itemHeight), flipped: false
         ) { _ in
-            drawGlyph(display, mark: mark, ink: ink)
+            for (index, glyph) in display.glyphs.enumerated() {
+                drawGlyph(
+                    glyph, mark: marks[index],
+                    originX: CGFloat(index) * (glyphDiameter + glyphGap), ink: ink)
+            }
 
-            var x = glyphDiameter + glyphTextGap
+            var x = textStart
             for (index, run) in runs.enumerated() {
                 x += gaps[index]
                 // Left-aligned in its slot, so a label and its value stay tight
@@ -107,12 +155,12 @@ enum MenuBarRenderer {
     // MARK: - Glyph
 
     private static func drawGlyph(
-        _ display: MenuBarDisplay, mark: NSImage?, ink: NSColor
+        _ glyph: MenuBarGlyph, mark: NSImage?, originX: CGFloat, ink: NSColor
     ) {
-        let center = CGPoint(x: glyphDiameter / 2, y: itemHeight / 2)
+        let center = CGPoint(x: originX + glyphDiameter / 2, y: itemHeight / 2)
         drawRing(
             center: center, radius: glyphDiameter / 2 - ringWidth / 2 - 0.1,
-            fraction: display.fraction, color: rampColor(display.severity * 100), ink: ink)
+            fraction: glyph.fraction, color: rampColor(glyph.severity * 100), ink: ink)
 
         guard let logo = mark else { return }
         logo.draw(

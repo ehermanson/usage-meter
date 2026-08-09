@@ -17,18 +17,18 @@ struct MenuBarTitleTests {
     ) {
         let store = UsageStore.shared
         let saved = (
-            store.providers, store.pinnedProvider, store.showRemaining, store.compactMenuBar
+            store.providers, store.pinnedProvider, store.showRemaining, store.menuBarStyle
         )
         defer {
             store.providers = saved.0
             store.pinnedProvider = saved.1
             store.showRemaining = saved.2
-            store.compactMenuBar = saved.3
+            store.menuBarStyle = saved.3
         }
         store.providers = providers
         store.pinnedProvider = nil
         store.showRemaining = showRemaining
-        store.compactMenuBar = false
+        store.menuBarStyle = .full
         check(store)
     }
 
@@ -92,9 +92,9 @@ struct MenuBarTitleTests {
     func displaySplit() {
         withStore(providers: [Self.split(42, 31)]) { store in
             let display = store.menuBarDisplay
-            #expect(display.fraction == 0.42)
-            #expect(display.severity == 0.42)
-            #expect(display.logoResource == "claude-logo")
+            #expect(display.glyphs[0].fraction == 0.42)
+            #expect(display.glyphs[0].severity == 0.42)
+            #expect(display.glyphs[0].logoResource == "claude-logo")
             // No name segment: the mark in the ring already identifies Claude.
             #expect(
                 display.segments == [
@@ -114,8 +114,8 @@ struct MenuBarTitleTests {
             // The arc follows the number down, battery-style, matching the
             // dropdown's bars — but the color still keys off the 80% consumed,
             // so a nearly-drained ring reads red rather than cooling off.
-            #expect(abs(display.fraction - 0.2) < 0.0001)
-            #expect(display.severity == 0.8)
+            #expect(abs(display.glyphs[0].fraction - 0.2) < 0.0001)
+            #expect(display.glyphs[0].severity == 0.8)
             #expect(display.segments.contains(MenuBarSegment(text: "20%", style: .primary)))
         }
     }
@@ -125,8 +125,8 @@ struct MenuBarTitleTests {
     func displayDefaultFillsRing() {
         withStore(providers: [Self.split(80, 31)]) { store in
             let display = store.menuBarDisplay
-            #expect(display.fraction == 0.8)
-            #expect(display.severity == 0.8)
+            #expect(display.glyphs[0].fraction == 0.8)
+            #expect(display.glyphs[0].severity == 0.8)
         }
     }
 
@@ -147,7 +147,7 @@ struct MenuBarTitleTests {
     @Test("compact mode drops the weekly pair from the segments")
     func displayCompactDropsWeekly() {
         withStore(providers: [Self.split(42, 31)]) { store in
-            store.compactMenuBar = true
+            store.menuBarStyle = .compact
             let display = store.menuBarDisplay
             #expect(
                 display.segments == [
@@ -155,8 +155,88 @@ struct MenuBarTitleTests {
                     MenuBarSegment(text: "42%", style: .primary),
                 ])
             // The ring is unaffected — it only ever tracked the 5hr window.
-            #expect(display.fraction == 0.42)
+            #expect(display.glyphs[0].fraction == 0.42)
         }
+    }
+
+    @MainActor
+    @Test("ring-only drops all the text but keeps the ring")
+    func displayRingOnly() {
+        withStore(providers: [Self.split(42, 31)]) { store in
+            store.menuBarStyle = .ringOnly
+            let display = store.menuBarDisplay
+            #expect(display.segments.isEmpty)
+            #expect(display.glyphs.count == 1)
+            #expect(display.glyphs[0].fraction == 0.42)
+            // With no text on the item, the numbers only survive in the tooltip.
+            #expect(store.menuBarTooltip == "Claude — 5h 42% · Wk 31% used")
+        }
+    }
+
+    @MainActor
+    @Test("per-provider mode shows one ring each, in registry order, with no text")
+    func displayAllProviders() {
+        withStore(providers: [Self.split(42, 31), Self.codex(80)]) { store in
+            store.menuBarStyle = .allProviders
+            // Pinning is meaningless here — every provider is on show anyway.
+            store.pinnedProvider = "Claude"
+            let display = store.menuBarDisplay
+            #expect(display.segments.isEmpty)
+            #expect(display.glyphs.map(\.id) == ["Claude", "Codex"])
+            #expect(display.glyphs[0].severity == 0.42)
+            #expect(display.glyphs[1].severity == 0.8)
+            #expect(display.glyphs[1].logoResource == "codex-logo")
+            #expect(store.menuBarTooltip == "Claude — 5h 42% · Wk 31% used\nCodex — 5h 80% used")
+        }
+    }
+
+    @MainActor
+    @Test("only the styles that mean something on this machine are offered")
+    func availableStyles() {
+        // One provider with a weekly window: nothing to compare against, so
+        // per-provider is pointless, but 5hr-only still collapses something.
+        withStore(providers: [Self.split(42, 31)]) { store in
+            #expect(store.availableMenuBarStyles == [.full, .compact, .ringOnly])
+        }
+        // A fixed-budget plan has no distinct weekly, so 5hr-only would render
+        // identically to the full style.
+        withStore(providers: [Self.enterprise(6)]) { store in
+            #expect(store.availableMenuBarStyles == [.full, .ringOnly])
+        }
+        // Two providers unlocks per-provider.
+        withStore(providers: [Self.split(42, 31), Self.codex(80)]) { store in
+            #expect(store.availableMenuBarStyles == [.full, .compact, .ringOnly, .allProviders])
+        }
+    }
+
+    @MainActor
+    @Test("a provider dropping out doesn't strip the style already selected")
+    func selectedStyleSurvivesLosingAProvider() {
+        // Chosen with two providers, then one signs out or stops reporting. The
+        // option has to stay listed, or the picker shows "Ring per provider"
+        // with nothing ticked and no way to see what's actually set.
+        withStore(providers: [Self.split(42, 31)]) { store in
+            store.menuBarStyle = .allProviders
+            #expect(store.availableMenuBarStyles.contains(.allProviders))
+            // Still renders sensibly meanwhile: one provider, one ring.
+            #expect(store.menuBarDisplay.glyphs.map(\.id) == ["Claude"])
+        }
+        // A style that isn't selected and isn't meaningful stays hidden.
+        withStore(providers: [Self.split(42, 31)]) { store in
+            store.menuBarStyle = .full
+            #expect(!store.availableMenuBarStyles.contains(.allProviders))
+        }
+    }
+
+    /// A second branded provider, for the multi-provider cases.
+    private static func codex(_ five: Double) -> ProviderUsage {
+        .ok(
+            "Codex",
+            pools: [
+                UsagePool(
+                    title: nil,
+                    windows: [UsageWindow(label: "5h", usedPercent: five, resetAt: nil)])
+            ])
     }
 
     @MainActor
@@ -164,8 +244,8 @@ struct MenuBarTitleTests {
     func displayEmpty() {
         withStore(providers: []) { store in
             let display = store.menuBarDisplay
-            #expect(display.fraction == 0)
-            #expect(display.logoResource == nil)
+            #expect(display.glyphs[0].fraction == 0)
+            #expect(display.glyphs[0].logoResource == nil)
             #expect(display.segments == [MenuBarSegment(text: "—", style: .label)])
         }
     }
@@ -187,7 +267,7 @@ struct MenuBarTitleTests {
         // Solo: nothing to disambiguate, so the name stays off — same rule the
         // flat title uses.
         withStore(providers: [Self.unbranded(60)]) { store in
-            #expect(store.menuBarDisplay.logoResource == nil)
+            #expect(store.menuBarDisplay.glyphs[0].logoResource == nil)
             #expect(
                 store.menuBarDisplay.segments.first == MenuBarSegment(text: "5h", style: .label))
         }
@@ -207,7 +287,7 @@ struct MenuBarTitleTests {
         withStore(providers: [Self.split(42), Self.unbranded(60)]) { store in
             store.pinnedProvider = "Claude"
             let display = store.menuBarDisplay
-            #expect(display.logoResource == "claude-logo")
+            #expect(display.glyphs[0].logoResource == "claude-logo")
             #expect(display.segments.first == MenuBarSegment(text: "5h", style: .label))
         }
     }

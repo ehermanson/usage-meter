@@ -75,45 +75,61 @@ struct MenuContentView: View {
     /// a plain label on the left and its control on the right, so mixed control
     /// types (menus, switches) still scan as one aligned column.
     private var settingsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Two groups rather than one flat list. Once the menu bar grew a
+            // provider *and* a style choice, a single column of five rows made
+            // "which provider is shown" and "start at login" look like the same
+            // kind of decision — the heading is what says they aren't.
+            settingsGroup("Menu Bar") {
+                // Which provider to pin only matters when there's a choice, and
+                // not at all when every one of them is on show.
+                if store.selectableProviders.count > 1, store.menuBarStyle != .allProviders {
+                    settingRow("Provider") { menuBarPicker }
+                }
+
+                if store.availableMenuBarStyles.count > 1 {
+                    settingRow("Style") { menuBarStylePicker }
+                }
+
+                settingRow("Show remaining") {
+                    settingSwitch("Show remaining", isOn: $store.showRemaining)
+                }
+            }
+
+            Divider().opacity(0.4)
+
+            settingsGroup("General") {
+                settingRow("Launch at Login") {
+                    settingSwitch("Launch at Login", isOn: $launchAtLogin)
+                        .onChange(of: launchAtLogin) { _, newValue in
+                            applyLaunchAtLogin(newValue)
+                        }
+                }
+
+                // Only offered once Claude Code was detected — for setups where
+                // the sign-in lives in a non-default CLAUDE_CONFIG_DIR the
+                // auto-detect heuristic can't see (e.g. one set only inside a
+                // shell alias).
+                if store.visibleProviders.contains(where: { $0.name == "Claude" }) {
+                    settingRow("Claude config") { claudeConfigPicker }
+                }
+            }
+        }
+        .cardSurface()
+    }
+
+    /// A titled run of setting rows.
+    private func settingsGroup(
+        _ title: String, @ViewBuilder rows: () -> some View
+    ) -> some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text("Settings")
+            Text(title)
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.tertiary)
                 .textCase(.uppercase)
                 .kerning(0.6)
-
-            // The picker only matters when there's a choice of provider to pin;
-            // with a single source it always resolves to that one, so hide it.
-            if store.selectableProviders.count > 1 {
-                settingRow("Menu bar") { menuBarPicker }
-            }
-
-            if store.compactMenuBarApplies {
-                settingRow("Compact (5hr only)") {
-                    settingSwitch("Compact (5hr only)", isOn: $store.compactMenuBar)
-                }
-            }
-
-            settingRow("Show % remaining") {
-                settingSwitch("Show % remaining", isOn: $store.showRemaining)
-            }
-
-            settingRow("Launch at Login") {
-                settingSwitch("Launch at Login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        applyLaunchAtLogin(newValue)
-                    }
-            }
-
-            // Last so the switches above stay a contiguous group. Only offered
-            // once Claude Code was detected — for setups where the sign-in
-            // lives in a non-default CLAUDE_CONFIG_DIR the auto-detect
-            // heuristic can't see (e.g. one set only inside a shell alias).
-            if store.visibleProviders.contains(where: { $0.name == "Claude" }) {
-                settingRow("Claude config") { claudeConfigPicker }
-            }
+            rows()
         }
-        .cardSurface()
     }
 
     /// One settings row: label left, control right, on a consistent height so
@@ -164,6 +180,28 @@ struct MenuContentView: View {
         .menuStyle(.borderlessButton)
         .controlSize(.small)
         .fixedSize()
+    }
+
+    /// How much the menu-bar item spells out, from both windows down to a bare
+    /// ring. Only the styles that mean something on this machine are offered.
+    private var menuBarStylePicker: some View {
+        Menu {
+            ForEach(store.availableMenuBarStyles) { style in
+                Button {
+                    store.menuBarStyle = style
+                } label: {
+                    pickerRow(style.label, checked: store.menuBarStyle == style)
+                }
+            }
+        } label: {
+            Text(store.menuBarStyle.label)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .controlSize(.small)
+        .fixedSize()
+        .help("How much the menu-bar item shows. The full numbers are always here in the dropdown.")
     }
 
     /// "Auto" resolves the Claude config dir the way the user's terminal would;

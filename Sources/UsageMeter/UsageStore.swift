@@ -20,9 +20,23 @@ final class UsageStore {
         didSet { UserDefaults.standard.set(pinnedProvider, forKey: "pinnedProvider") }
     }
 
-    /// Compact menu-bar title: show only the 5hr window, skip weekly.
-    var compactMenuBar: Bool = UserDefaults.standard.bool(forKey: "compactMenuBar") {
-        didSet { UserDefaults.standard.set(compactMenuBar, forKey: "compactMenuBar") }
+    /// How much the menu-bar item spells out, from both windows down to a bare
+    /// ring — and whether it tracks one provider or all of them.
+    var menuBarStyle: MenuBarStyle = UsageStore.loadMenuBarStyle() {
+        didSet { UserDefaults.standard.set(menuBarStyle.rawValue, forKey: "menuBarStyle") }
+    }
+
+    /// Carries over the boolean "compact" preference this replaced: the two
+    /// states it switched between are now two of four, so an existing `true`
+    /// lands on `.compact` and anything else on `.full`.
+    private static func loadMenuBarStyle() -> MenuBarStyle {
+        let defaults = UserDefaults.standard
+        if let raw = defaults.string(forKey: "menuBarStyle"),
+            let style = MenuBarStyle(rawValue: raw)
+        {
+            return style
+        }
+        return defaults.bool(forKey: "compactMenuBar") ? .compact : .full
     }
 
     /// Show each window as percent *remaining* (e.g. "89%") instead of percent
@@ -180,23 +194,29 @@ final class UsageStore {
     /// same thing; they differ only in that the mark lets this one drop the
     /// provider's name, which the string still has to spell out.
     var menuBarDisplay: MenuBarDisplay {
-        guard let p = menuBarProvider else {
-            return MenuBarDisplay(
-                fraction: 0, severity: 0, logoResource: nil,
-                segments: [MenuBarSegment(text: "—", style: .label)])
+        // One ring per provider, no text — which provider is which is carried
+        // entirely by the marks, and the numbers move to the tooltip.
+        if menuBarStyle == .allProviders {
+            let tracked = providers.filter { $0.hasWindows }
+            guard !tracked.isEmpty else { return Self.placeholderDisplay }
+            return MenuBarDisplay(glyphs: tracked.map(glyph(for:)), segments: [])
         }
+
+        guard let p = menuBarProvider else { return Self.placeholderDisplay }
         let logo = style(for: p.name).logoResource
 
         var values: [MenuBarSegment] = []
-        if let f = p.fiveHour {
-            values.append(MenuBarSegment(text: Self.shortLabel(f.label), style: .label))
-            values.append(
-                MenuBarSegment(text: Format.percent(displayPercent(f)), style: .primary))
-        }
-        if !compactMenuBar, let w = p.weekly, w.id != p.fiveHour?.id {
-            values.append(MenuBarSegment(text: Self.shortLabel(w.label), style: .label))
-            values.append(
-                MenuBarSegment(text: Format.percent(displayPercent(w)), style: .secondary))
+        if menuBarStyle != .ringOnly {
+            if let f = p.fiveHour {
+                values.append(MenuBarSegment(text: Self.shortLabel(f.label), style: .label))
+                values.append(
+                    MenuBarSegment(text: Format.percent(displayPercent(f)), style: .primary))
+            }
+            if menuBarStyle == .full, let w = p.weekly, w.id != p.fiveHour?.id {
+                values.append(MenuBarSegment(text: Self.shortLabel(w.label), style: .label))
+                values.append(
+                    MenuBarSegment(text: Format.percent(displayPercent(w)), style: .secondary))
+            }
         }
 
         // A fixed-budget plan's lone "Usage" window isn't self-describing the
@@ -208,36 +228,76 @@ final class UsageStore {
 
         var segments: [MenuBarSegment] = []
         // The mark already says which provider this is, so the name is only
-        // spelled out when there's no logo to carry it.
-        if logo == nil, values.isEmpty || selectableProviders.count > 1 || isFixedBudget {
+        // spelled out when there's no logo to carry it — and never when there's
+        // no text at all to attach it to.
+        if logo == nil, !values.isEmpty, selectableProviders.count > 1 || isFixedBudget {
             segments.append(MenuBarSegment(text: p.name, style: .label))
         }
         segments.append(contentsOf: values)
 
-        // The ring tracks whatever the numbers say — filling with usage, or
-        // draining as headroom shrinks — while its color always keys off usage,
-        // so a nearly-drained ring still reads red. Same split the dropdown's
-        // bars use (see `WindowBar.barFraction` / `barColor`).
-        let used = (p.fiveHour?.usedPercent ?? 0) / 100
-        return MenuBarDisplay(
-            fraction: showRemaining ? 1 - used : used,
-            severity: used,
-            logoResource: logo,
-            segments: segments)
+        return MenuBarDisplay(glyphs: [glyph(for: p)], segments: segments)
     }
 
-    /// Full: "Claude  5h 7% · Wk 31%". Compact: "Claude  5h 7%". A provider with
-    /// no 5h/weekly split shows its own window label (e.g. "Gemini  Daily 12%").
-    /// With a single provider the name is dropped (e.g. "5h 7% · Wk 31%") —
-    /// except for a fixed-budget plan's generic "Usage" window, which always
-    /// carries the name ("Claude Usage 6%", or "Claude Usage 94% left").
+    /// Nothing to show yet: an empty ring and a dash.
+    private static let placeholderDisplay = MenuBarDisplay(
+        glyphs: [MenuBarGlyph(id: "—", fraction: 0, severity: 0, logoResource: nil)],
+        segments: [MenuBarSegment(text: "—", style: .label)])
+
+    /// A provider's ring. The arc tracks whatever the numbers say — filling with
+    /// usage, or draining as headroom shrinks — while its color always keys off
+    /// usage, so a nearly-drained ring still reads red. Same split the dropdown's
+    /// bars use (see `WindowBar.barFraction` / `barColor`).
+    private func glyph(for p: ProviderUsage) -> MenuBarGlyph {
+        let used = (p.fiveHour?.usedPercent ?? 0) / 100
+        return MenuBarGlyph(
+            id: p.name,
+            fraction: showRemaining ? 1 - used : used,
+            severity: used,
+            logoResource: style(for: p.name).logoResource)
+    }
+
+    /// What the item means, spelled out in full for the tooltip and VoiceOver.
+    /// Independent of `menuBarStyle`: the terser the item is drawn, the more
+    /// this is carrying, and in `.ringOnly` it's the only place the numbers
+    /// appear at all.
+    var menuBarTooltip: String {
+        let described: [String]
+        if menuBarStyle == .allProviders {
+            described = providers.filter { $0.hasWindows }.map(describe(_:))
+        } else {
+            described = menuBarProvider.map { [describe($0)] } ?? []
+        }
+        return described.isEmpty ? "No usage to show" : described.joined(separator: "\n")
+    }
+
+    private func describe(_ p: ProviderUsage) -> String {
+        var parts: [String] = []
+        if let f = p.fiveHour {
+            parts.append("\(Self.shortLabel(f.label)) \(Format.percent(displayPercent(f)))")
+        }
+        if let w = p.weekly, w.id != p.fiveHour?.id {
+            parts.append("\(Self.shortLabel(w.label)) \(Format.percent(displayPercent(w)))")
+        }
+        guard !parts.isEmpty else { return p.name }
+        return "\(p.name) — \(parts.joined(separator: " · ")) \(showRemaining ? "left" : "used")"
+    }
+
+    /// "Claude  5h 7% · Wk 31%". A provider with no 5h/weekly split shows its own
+    /// window label (e.g. "Gemini  Daily 12%"). With a single provider the name
+    /// is dropped (e.g. "5h 7% · Wk 31%") — except for a fixed-budget plan's
+    /// generic "Usage" window, which always carries the name ("Claude Usage 6%",
+    /// or "Claude Usage 94% left").
+    ///
+    /// Always the full description, whatever `menuBarStyle` draws: this is the
+    /// accessibility label, so it should say everything the item stands for even
+    /// when the item itself is only a ring.
     var menuBarTitle: String {
         guard let p = menuBarProvider else { return "—" }
         var parts: [String] = []
         if let f = p.fiveHour {
             parts.append("\(Self.shortLabel(f.label)) \(Format.percent(displayPercent(f)))")
         }
-        if !compactMenuBar, let w = p.weekly, w.id != p.fiveHour?.id {
+        if let w = p.weekly, w.id != p.fiveHour?.id {
             parts.append("\(Self.shortLabel(w.label)) \(Format.percent(displayPercent(w)))")
         }
         let body = parts.joined(separator: " · ")
@@ -252,14 +312,26 @@ final class UsageStore {
         return selectableProviders.count > 1 ? "\(p.name)  \(body)" : body
     }
 
-    /// Whether the "Compact" toggle does anything worth offering. It only drops
-    /// the weekly window from the menu-bar title, so it's meaningless for a
-    /// provider with no distinct 5h/weekly split — e.g. a fixed-budget Enterprise
-    /// plan that reports only a single "Usage" window. Hidden unless some shown
-    /// provider actually has a weekly window to collapse.
-    var compactMenuBarApplies: Bool {
-        providers.contains { p in
-            p.hasWindows && p.weekly != nil && p.weekly?.id != p.fiveHour?.id
+    /// The styles worth offering on this machine. Two of the four only mean
+    /// something given the right data, and an option that visibly does nothing
+    /// is worse than one that isn't there:
+    ///
+    /// - `.compact` drops the weekly window, so it's indistinguishable from
+    ///   `.full` for a provider with no distinct 5h/weekly split — e.g. a
+    ///   fixed-budget Enterprise plan reporting a single "Usage" window.
+    /// - `.allProviders` needs more than one provider to be worth the name.
+    ///
+    /// Whatever is currently selected always stays in the list, even once the
+    /// data that justified it has gone: a provider signing out shouldn't leave
+    /// the picker showing "Ring per provider" with nothing ticked beneath it.
+    var availableMenuBarStyles: [MenuBarStyle] {
+        MenuBarStyle.allCases.filter { style in
+            if style == menuBarStyle { return true }
+            switch style {
+            case .full, .ringOnly: return true
+            case .compact: return providers.contains { $0.hasWindows && $0.hasDistinctWeekly }
+            case .allProviders: return selectableProviders.count > 1
+            }
         }
     }
 
@@ -300,6 +372,46 @@ final class UsageStore {
         if refreshToken == myToken { refreshTask = nil }
     }
 
+    /// Runs one provider's fetch, giving up after its `fetchTimeout`.
+    ///
+    /// Deliberately races two *unstructured* tasks rather than using a task
+    /// group: a group awaits its children before returning, so a child wedged in
+    /// a synchronous system call would keep the group — and this pass — waiting
+    /// no matter how promptly the timeout fired. Cancellation is no help either,
+    /// since a blocked `SecItemCopyMatching` never reaches a cancellation point.
+    /// Abandoning the task is the only thing that actually works; it occupies a
+    /// thread until the call returns on its own, which is a far better trade
+    /// than freezing every provider's data and the timestamp behind it.
+    static func fetch(_ provider: UsageProvider) async -> ProviderUsage {
+        let winner = FirstResult()
+        return await withCheckedContinuation { continuation in
+            Task {
+                let usage = await provider.fetch()
+                if await winner.claim() { continuation.resume(returning: usage) }
+            }
+            Task {
+                try? await Task.sleep(
+                    nanoseconds: UInt64(provider.fetchTimeout * 1_000_000_000))
+                if await winner.claim() {
+                    // Retryable, so the last good snapshot keeps showing instead
+                    // of the row blanking out over a transient stall.
+                    continuation.resume(
+                        returning: .failed(provider.name, "not responding", retryable: true))
+                }
+            }
+        }
+    }
+
+    /// Lets exactly one of two racing tasks resume the continuation.
+    private actor FirstResult {
+        private var claimed = false
+        func claim() -> Bool {
+            guard !claimed else { return false }
+            claimed = true
+            return true
+        }
+    }
+
     private func performRefresh(force: Bool) async {
         isLoading = true
         defer { isLoading = false }
@@ -319,7 +431,7 @@ final class UsageStore {
             }
             if due {
                 states[provider.name, default: .init()].lastAttempt = .now
-                tasks[provider.name] = Task { await provider.fetch() }
+                tasks[provider.name] = Task { await Self.fetch(provider) }
             }
         }
 
@@ -360,10 +472,13 @@ final class UsageStore {
             states[name]?.lastGood = nil  // no stale data for hard failures
             return fresh
         }
+        // Carry the actual reason through rather than always saying "throttled":
+        // a fetch that timed out is a different thing to explain than an
+        // endpoint that turned us away, and the row is the only place it shows.
         return ProviderUsage(
             name: prev.name,
             pools: prev.pools,
-            error: "throttled — showing last value",
+            error: "\(fresh.error ?? "unavailable") — showing last value",
             plan: prev.plan ?? fresh.plan,
             retryable: true
         )

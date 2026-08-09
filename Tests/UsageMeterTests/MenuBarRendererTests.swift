@@ -12,7 +12,10 @@ import Testing
 struct MenuBarRendererTests {
     private func display(_ five: String, _ week: String, fraction: Double = 0.5) -> MenuBarDisplay {
         MenuBarDisplay(
-            fraction: fraction, severity: fraction, logoResource: "claude-logo",
+            glyphs: [
+                MenuBarGlyph(
+                    id: "p", fraction: fraction, severity: fraction, logoResource: "claude-logo")
+            ],
             segments: [
                 MenuBarSegment(text: "5h", style: .label),
                 MenuBarSegment(text: five, style: .primary),
@@ -41,7 +44,9 @@ struct MenuBarRendererTests {
         let short = width(display("50%", "50%"))
         let long = width(
             MenuBarDisplay(
-                fraction: 0.5, severity: 0.5, logoResource: "claude-logo",
+                glyphs: [
+                    MenuBarGlyph(id: "p", fraction: 0.5, severity: 0.5, logoResource: "claude-logo")
+                ],
                 segments: [
                     MenuBarSegment(text: "Usage", style: .label),
                     MenuBarSegment(text: "50%", style: .primary),
@@ -49,10 +54,31 @@ struct MenuBarRendererTests {
         #expect(long != short)
     }
 
+    @Test("a ring with no text is exactly as wide as the ring")
+    func ringOnlyHasNoTrailingSlack() {
+        // Any extra here is dead space on the right of the item — invisible
+        // until the highlight capsule draws around it and sits off-centre.
+        let bare = MenuBarDisplay(
+            glyphs: [MenuBarGlyph(id: "p", fraction: 0.4, severity: 0.4, logoResource: nil)],
+            segments: [])
+        #expect(width(bare) == 20)
+
+        // Two rings: both diameters plus one inter-ring gap, nothing trailing.
+        let pair = MenuBarDisplay(
+            glyphs: [
+                MenuBarGlyph(id: "a", fraction: 0.4, severity: 0.4, logoResource: nil),
+                MenuBarGlyph(id: "b", fraction: 0.2, severity: 0.2, logoResource: nil),
+            ], segments: [])
+        #expect(width(pair) == 44)
+    }
+
     @Test("an empty title still renders the ring")
     func glyphOnlyHasWidth() {
         let bare = MenuBarDisplay(
-            fraction: 0.4, severity: 0.4, logoResource: "claude-logo", segments: [])
+            glyphs: [
+                MenuBarGlyph(id: "p", fraction: 0.4, severity: 0.4, logoResource: "claude-logo")
+            ],
+            segments: [])
         let image = MenuBarRenderer.image(bare, ink: .black)
         #expect(image.size.width > 0)
         #expect(image.size.height > 0)
@@ -62,14 +88,20 @@ struct MenuBarRendererTests {
     func drainedRingKeepsUsageColor() {
         // Remaining mode at 92% used: a nearly-empty arc that must still be red.
         let drained = MenuBarDisplay(
-            fraction: 0.08, severity: 0.92, logoResource: "claude-logo", segments: [])
+            glyphs: [
+                MenuBarGlyph(id: "p", fraction: 0.08, severity: 0.92, logoResource: "claude-logo")
+            ],
+            segments: [])
         let critical = MenuBarRenderer.rampColor(92)
         // Same geometry, healthy usage — the arcs match but the colors must not.
         let healthy = MenuBarDisplay(
-            fraction: 0.08, severity: 0.08, logoResource: "claude-logo", segments: [])
+            glyphs: [
+                MenuBarGlyph(id: "p", fraction: 0.08, severity: 0.08, logoResource: "claude-logo")
+            ],
+            segments: [])
         #expect(critical.redComponent > critical.greenComponent)
-        #expect(MenuBarRenderer.rampColor(drained.severity * 100) == critical)
-        #expect(MenuBarRenderer.rampColor(healthy.severity * 100) != critical)
+        #expect(MenuBarRenderer.rampColor(drained.glyphs[0].severity * 100) == critical)
+        #expect(MenuBarRenderer.rampColor(healthy.glyphs[0].severity * 100) != critical)
     }
 
     // MARK: - Arc geometry
@@ -120,7 +152,8 @@ struct MenuBarRendererTests {
         // Half full: 12 through 6 the clockwise way, so the right side is the
         // painted one and the left is bare track.
         let half = MenuBarDisplay(
-            fraction: 0.5, severity: 0.5, logoResource: nil, segments: [])
+            glyphs: [MenuBarGlyph(id: "p", fraction: 0.5, severity: 0.5, logoResource: nil)],
+            segments: [])
         let fill = MenuBarRenderer.rampColor(50)
         #expect(isFill(ringSample(half, oClock: 3), fill))
         #expect(!isFill(ringSample(half, oClock: 9), fill))
@@ -129,7 +162,8 @@ struct MenuBarRendererTests {
     @Test("an empty ring paints no fill anywhere, including its origin")
     func emptyArcHasNoFill() {
         let empty = MenuBarDisplay(
-            fraction: 0, severity: 0, logoResource: nil, segments: [])
+            glyphs: [MenuBarGlyph(id: "p", fraction: 0, severity: 0, logoResource: nil)],
+            segments: [])
         let fill = MenuBarRenderer.rampColor(0)
         for hour in [12.0, 3, 6, 9] {
             #expect(!isFill(ringSample(empty, oClock: hour), fill))
@@ -139,7 +173,8 @@ struct MenuBarRendererTests {
     @Test("a full ring paints every clock position")
     func fullArcClosesAllTheWayRound() {
         let full = MenuBarDisplay(
-            fraction: 1, severity: 1, logoResource: nil, segments: [])
+            glyphs: [MenuBarGlyph(id: "p", fraction: 1, severity: 1, logoResource: nil)],
+            segments: [])
         let fill = MenuBarRenderer.rampColor(100)
         // Including 12, where the round caps meet — a notch there would be the
         // visible failure.

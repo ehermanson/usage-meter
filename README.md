@@ -24,8 +24,13 @@ The menu-bar item tracks one provider's 5-hour and weekly usage: by default
 whichever is closest to its limit, or pin a specific one. The provider's mark
 sits inside a ring that fills with the 5-hour window and shades green → amber →
 red as it approaches the limit. Dropdown bars turn **yellow at 75%** and **red
-at 90%**. Dropdown options include **Compact** (title shows the 5-hour window
-only), **Show % remaining**, and **Launch at Login**.
+at 90%**.
+
+Pick how much the item shows under **Style**: 5-hour and weekly, 5-hour only,
+just the ring, or a ring per provider for tracking all of them side by side.
+Options that wouldn't change anything on your setup are hidden — a ring per
+provider needs more than one. The dropdown always has the full numbers whichever
+style is set. Also there: **Show remaining**, and **Launch at Login**.
 
 ## Install
 

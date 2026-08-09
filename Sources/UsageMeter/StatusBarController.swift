@@ -32,21 +32,27 @@ final class StatusBarController {
     /// for us here, so the open state is painted by hand — see `applyHighlight`.
     private var isHighlighted = false
 
-    /// How the ring is drawn right now, eased toward the store's real values.
-    /// Arc length and color travel together on one timer, so the color can't
-    /// land on its final shade while the arc is still halfway there. Starting at
-    /// zero makes the first data of the session sweep up from empty.
-    private var ringFraction: Double = 0
-    private var ringSeverity: Double = 0
+    /// How each ring is drawn right now, eased toward the store's real values and
+    /// keyed by provider so a ring stays matched to its own data when the set of
+    /// them changes. Arc length and color travel together on one timer, so the
+    /// color can't land on its final shade while the arc is still halfway there.
+    /// A ring absent from this map starts at zero, which is what makes the first
+    /// data of the session — and any provider appearing later — sweep up from
+    /// empty rather than snapping into place.
+    private var ringValues: [String: RingValues] = [:]
     private var ringAnimation: RingAnimation?
     private var ringTimer: Timer?
     private let ringDuration: CFTimeInterval = 0.55
 
+    private struct RingValues: Equatable {
+        var fraction: Double
+        var severity: Double
+        static let empty = RingValues(fraction: 0, severity: 0)
+    }
+
     private struct RingAnimation {
-        let fromFraction: Double
-        let toFraction: Double
-        let fromSeverity: Double
-        let toSeverity: Double
+        let from: [String: RingValues]
+        let to: [String: RingValues]
         let startedAt: CFTimeInterval
     }
 
@@ -227,8 +233,13 @@ final class StatusBarController {
     /// to. The segments stay as-is, so the text never lags the real numbers.
     private var animatedDisplay: MenuBarDisplay {
         var display = store.menuBarDisplay
-        display.fraction = ringFraction
-        display.severity = ringSeverity
+        display.glyphs = display.glyphs.map { glyph in
+            var eased = glyph
+            let values = ringValues[glyph.id] ?? .empty
+            eased.fraction = values.fraction
+            eased.severity = values.severity
+            return eased
+        }
         return display
     }
 
@@ -237,7 +248,14 @@ final class StatusBarController {
         button.image = MenuBarRenderer.image(animatedDisplay, ink: ink)
         // The image carries no text AppKit can read, so the flat title is the
         // accessible label.
+        //
+        // `toolTip` is set for the same reason, but don't count on it: macOS
+        // doesn't surface tooltips for menu-bar extras here, with the string on
+        // the button and an explicit tooltip rect both making no difference. It
+        // stays because it's free and correct — the dropdown is what actually
+        // has to carry the numbers for the ring-only styles.
         button.setAccessibilityLabel(store.menuBarTitle)
+        button.toolTip = store.menuBarTooltip
         applyHighlight(to: button)
     }
 
@@ -313,15 +331,30 @@ final class StatusBarController {
     /// runs only across a change and stops at the end. Nothing animates at rest:
     /// a permanent loop would keep the app awake for a decoration.
     private func animateRing(to display: MenuBarDisplay) {
-        let fraction = max(0, min(1, display.fraction))
-        let severity = max(0, min(1, display.severity))
-        guard abs(fraction - ringFraction) > 0.001 || abs(severity - ringSeverity) > 0.001
-        else { return }
+        let target = Dictionary(
+            uniqueKeysWithValues: display.glyphs.map { glyph in
+                (
+                    glyph.id,
+                    RingValues(
+                        fraction: max(0, min(1, glyph.fraction)),
+                        severity: max(0, min(1, glyph.severity)))
+                )
+            })
+        // Nothing to do when every ring is already where it should be. Compared
+        // against the rings the target actually names, so a provider dropping out
+        // of view doesn't count as a change worth animating.
+        let settled = target.allSatisfy { id, value in
+            let current = ringValues[id] ?? .empty
+            return abs(current.fraction - value.fraction) <= 0.001
+                && abs(current.severity - value.severity) <= 0.001
+        }
+        guard !settled else {
+            ringValues = ringValues.filter { target.keys.contains($0.key) }
+            return
+        }
 
         ringAnimation = RingAnimation(
-            fromFraction: ringFraction, toFraction: fraction,
-            fromSeverity: ringSeverity, toSeverity: severity,
-            startedAt: CACurrentMediaTime())
+            from: ringValues, to: target, startedAt: CACurrentMediaTime())
         guard ringTimer == nil else { return }
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.stepRing() }
@@ -339,14 +372,17 @@ final class StatusBarController {
         let progress = min(1, (CACurrentMediaTime() - animation.startedAt) / ringDuration)
         // Ease-out cubic: quick off the mark, settling gently onto the value.
         let eased = 1 - pow(1 - progress, 3)
-        ringFraction =
-            animation.fromFraction + (animation.toFraction - animation.fromFraction) * eased
-        ringSeverity =
-            animation.fromSeverity + (animation.toSeverity - animation.fromSeverity) * eased
+        for (id, to) in animation.to {
+            let from = animation.from[id] ?? .empty
+            ringValues[id] = RingValues(
+                fraction: from.fraction + (to.fraction - from.fraction) * eased,
+                severity: from.severity + (to.severity - from.severity) * eased)
+        }
         render()
         if progress >= 1 {
-            ringFraction = animation.toFraction
-            ringSeverity = animation.toSeverity
+            // Land exactly on the targets, and forget any ring that's no longer
+            // shown so a provider coming back later sweeps up from empty again.
+            ringValues = animation.to
             stopRingAnimation()
         }
     }
