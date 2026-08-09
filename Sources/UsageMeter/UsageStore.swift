@@ -111,13 +111,14 @@ final class UsageStore {
                 var usage = try? decoder.decode(ProviderUsage.self, from: data)
             else { continue }
             // A snapshot from a build that predates `capturedAt` carries no
-            // stamp. The closest fact on record is the store-wide last-refresh
-            // date: the values can be older than that (a carried-forward
-            // snapshot is rewritten every pass), never newer. Adopting it errs
-            // toward keeping — a genuinely fresh snapshot survives the upgrade,
-            // and a genuinely ancient one is over-trusted for at most one day
-            // before aging out.
-            if usage.capturedAt == nil { usage.capturedAt = lastPass }
+            // stamp, so give it the tightest capture bound on record. Erring
+            // toward keeping is fine — an over-trusted snapshot ages out
+            // within a day — but a long-past reset date proves the data old
+            // enough to drop right now, so use it when it's the tighter bound.
+            if usage.capturedAt == nil {
+                usage.capturedAt = Self.legacyCaptureBound(
+                    lastPass: lastPass, windows: usage.allWindows)
+            }
             guard !Self.isExpired(usage) else { continue }
             states[provider.name, default: .init()].lastGood = usage
             // The displayed copy admits its age once that age is worth naming:
@@ -502,6 +503,17 @@ final class UsageStore {
     /// thing the user needs to know.
     /// Internal so the boundary tests assert around this exact value.
     nonisolated static let ageWorthNaming: TimeInterval = 3600
+
+    /// When can an unstamped legacy snapshot have been captured, at the latest?
+    /// No later than the store's last completed refresh — and no later than any
+    /// of its own reset dates, since a window's value is read before that
+    /// window rolls over. The store-wide date alone can wildly understate age:
+    /// the old build refreshed it on every pass, including the passes that
+    /// merely re-carried a weeks-old value. Nil when there's no evidence at
+    /// all, which `isExpired` treats as too old. Exposed for tests.
+    nonisolated static func legacyCaptureBound(lastPass: Date?, windows: [UsageWindow]) -> Date? {
+        ([lastPass] + windows.map(\.resetAt)).compactMap { $0 }.min()
+    }
 
     /// True once a cached snapshot is too old to stand in for a live one. A
     /// snapshot with no stamp was cached by a build that didn't record one, so

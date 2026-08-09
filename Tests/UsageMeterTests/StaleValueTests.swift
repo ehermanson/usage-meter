@@ -46,6 +46,30 @@ struct StaleValueTests {
         #expect(UsageStore.isExpired(snapshot(agedBy: nil), now: now))
     }
 
+    @Test("a legacy snapshot's age is bounded by its own reset dates")
+    func legacyBoundByReset() {
+        // The store-wide refresh date says "just now" (the old build rewrote it
+        // every pass), but the snapshot's only window reset nine days ago — the
+        // value must predate that reset, so the tighter bound wins and expires it.
+        let longPast = now.addingTimeInterval(-9 * 24 * 3600)
+        let windows = [UsageWindow(label: "Daily", usedPercent: 0, resetAt: longPast)]
+        let bound = UsageStore.legacyCaptureBound(lastPass: now, windows: windows)
+        #expect(bound == longPast)
+        var usage = snapshot(agedBy: nil)
+        usage.capturedAt = bound
+        #expect(UsageStore.isExpired(usage, now: now))
+    }
+
+    @Test("a legacy snapshot with future resets keeps the refresh date as its bound")
+    func legacyBoundByLastPass() {
+        let futureReset = now.addingTimeInterval(3600)
+        let windows = [UsageWindow(label: "5h", usedPercent: 40, resetAt: futureReset)]
+        let recent = now.addingTimeInterval(-600)
+        #expect(UsageStore.legacyCaptureBound(lastPass: recent, windows: windows) == recent)
+        // No evidence at all → nil, which isExpired treats as too old to trust.
+        #expect(UsageStore.legacyCaptureBound(lastPass: nil, windows: []) == nil)
+    }
+
     @Test("a recent value is described tersely")
     func terseNote() {
         let captured = now.addingTimeInterval(-(UsageStore.ageWorthNaming - 1))
