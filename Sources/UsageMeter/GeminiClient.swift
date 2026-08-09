@@ -102,15 +102,26 @@ enum GeminiClient {
             cachedProject = saved
             return saved
         }
+        let project = try await deriveProject(token: token)
+        remember(project)
+        return project
+    }
+
+    /// Asks loadCodeAssist which project this account's usage hangs off,
+    /// bypassing the cache. Some accounts legitimately have none.
+    private static func deriveProject(token: String) async throws -> String {
         let json = try await post(
             "loadCodeAssist", token: token,
             body: ["metadata": ["pluginType": "GEMINI"]])
         guard let project = json["cloudaicompanionProject"] as? String, !project.isEmpty else {
             throw GeminiError("No Code Assist project for this account")
         }
+        return project
+    }
+
+    private static func remember(_ project: String) {
         cachedProject = project
         UserDefaults.standard.set(project, forKey: projectKey)
-        return project
     }
 
     private static func retrieveQuota(
@@ -119,19 +130,23 @@ enum GeminiClient {
         do {
             let json = try await post("retrieveUserQuota", token: token, body: ["project": project])
             return json["buckets"] as? [[String: Any]] ?? []
-        } catch {
+        } catch let error as GeminiError {
             // The cached project belongs to whichever account/tool was signed in
-            // when it was fetched. If it no longer matches the current token (the
-            // user switched accounts or sign-in tools), the call fails here — drop
-            // it so the next fetch re-derives the project via loadCodeAssist.
-            clearProjectCache()
-            throw error
+            // when it was fetched, so a 4xx refusal may mean it's stale (the
+            // user switched accounts or sign-in tools). Recover by asking
+            // loadCodeAssist for the current project — but only ever *replace*
+            // the cache with a better answer, never clear it outright. Some
+            // accounts have no project at all, so a clear on what turns out to
+            // be a transient refusal is a one-way door: with the cache gone
+            // there is nothing left to retry, permanently. 401 is about the
+            // token and 5xx/network about nothing — no re-derive for those.
+            guard let status = error.status, (400..<500).contains(status), status != 401,
+                let fresh = try? await deriveProject(token: token), fresh != project
+            else { throw error }
+            remember(fresh)
+            let json = try await post("retrieveUserQuota", token: token, body: ["project": fresh])
+            return json["buckets"] as? [[String: Any]] ?? []
         }
-    }
-
-    private static func clearProjectCache() {
-        cachedProject = nil
-        UserDefaults.standard.removeObject(forKey: projectKey)
     }
 
     private static func post(
@@ -154,9 +169,13 @@ enum GeminiClient {
             if code == 401 { cachedToken = nil }  // force a refresh next time
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
                 .flatMap { ($0["error"] as? [String: Any])?["message"] as? String }
+            // 401 (a refresh fixes it next tick), 429 (rate limit), and 5xx are
+            // moments, not verdicts — retryable keeps the last good snapshot on
+            // screen instead of wiping it over one of them.
             throw GeminiError(
                 message ?? "Gemini API error \(code)",
-                retryable: code == 401 || code >= 500)
+                retryable: code == 401 || code == 429 || code >= 500,
+                status: code)
         }
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
@@ -471,14 +490,18 @@ enum GeminiClient {
         /// True when no credentials were found at all: Gemini isn't set up on this
         /// machine, so its section is hidden rather than shown with a hint.
         let notDetected: Bool
+        /// The HTTP status this came from, when it came from one at all — lets a
+        /// caller tell "the API refused this argument" from "the network failed".
+        let status: Int?
         init(
             _ message: String, retryable: Bool = true, setupNeeded: Bool = false,
-            notDetected: Bool = false
+            notDetected: Bool = false, status: Int? = nil
         ) {
             self.message = message
             self.retryable = retryable
             self.setupNeeded = setupNeeded
             self.notDetected = notDetected
+            self.status = status
         }
     }
 

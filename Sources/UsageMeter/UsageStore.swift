@@ -82,6 +82,10 @@ final class UsageStore {
         /// `.notDetected`). Reused for a provider that isn't due this pass so an
         /// undetected/hidden provider doesn't flash a placeholder row.
         var lastResolved: ProviderUsage?
+        /// Why the most recent fetch failed (retryable failures only) — lets
+        /// back-off passes rebuild the carried-forward row's note against the
+        /// current clock without refetching.
+        var lastFailureReason: String?
     }
     private var states: [String: ProviderState] = [:]
 
@@ -94,20 +98,41 @@ final class UsageStore {
 
     /// Seed `lastGood` and the visible rows from disk so the menu has data the
     /// instant it opens, before the first (possibly throttled) probe returns.
+    /// A snapshot too old to still be meaningful isn't seeded — the point of
+    /// seeding is to skip an empty first paint, not to reanimate numbers from
+    /// last week.
     private func loadLastGood() {
         let defaults = UserDefaults.standard
         let decoder = JSONDecoder()
+        let lastPass = defaults.object(forKey: PersistKey.updated) as? Date
         var seeded: [ProviderUsage] = []
         for provider in registry {
             guard let data = defaults.data(forKey: PersistKey.lastGood(provider.name)),
-                let usage = try? decoder.decode(ProviderUsage.self, from: data)
+                var usage = try? decoder.decode(ProviderUsage.self, from: data)
             else { continue }
+            // A snapshot from a build that predates `capturedAt` carries no
+            // stamp. The closest fact on record is the store-wide last-refresh
+            // date: the values can be older than that (a carried-forward
+            // snapshot is rewritten every pass), never newer. Adopting it errs
+            // toward keeping — a genuinely fresh snapshot survives the upgrade,
+            // and a genuinely ancient one is over-trusted for at most one day
+            // before aging out.
+            if usage.capturedAt == nil { usage.capturedAt = lastPass }
+            guard !Self.isExpired(usage) else { continue }
             states[provider.name, default: .init()].lastGood = usage
+            // The displayed copy admits its age once that age is worth naming:
+            // data restored from disk shouldn't render as live just because the
+            // fetch that would correct it hasn't finished yet.
+            if let captured = usage.capturedAt,
+                Date.now.timeIntervalSince(captured) >= Self.ageWorthNaming
+            {
+                usage.error = Self.staleNote(captured)
+            }
             seeded.append(usage)
         }
         if !seeded.isEmpty {
             providers = seeded
-            lastUpdated = defaults.object(forKey: PersistKey.updated) as? Date
+            lastUpdated = lastPass
         }
     }
 
@@ -443,7 +468,13 @@ final class UsageStore {
             guard let task = tasks[name] else {
                 // Not due this pass — reuse whatever was last shown (which may be
                 // `.notDetected`, i.e. hidden) rather than a fabricated placeholder.
-                resolved.append(states[name]?.lastResolved ?? .notDetected(name))
+                // A carried-forward stale row is the exception: replaying it
+                // verbatim would freeze its age note, so recompute it instead.
+                let shown =
+                    restaleCarriedForward(name) ?? states[name]?.lastResolved
+                    ?? .notDetected(name)
+                states[name, default: .init()].lastResolved = shown
+                resolved.append(shown)
                 continue
             }
             let fresh = await task.value
@@ -459,28 +490,100 @@ final class UsageStore {
         persistLastGood()
     }
 
+    /// How long a cached snapshot stays worth showing after a failed refresh.
+    /// Past a day every window it holds has almost certainly rolled over, so the
+    /// numbers describe a period that has already ended — and a row that renders
+    /// them looks live, which is worse than a row that admits it has nothing.
+    /// Internal so the boundary tests assert around this exact value.
+    nonisolated static let maxStaleAge: TimeInterval = 24 * 3600
+
+    /// Age at which the carried-forward note starts naming it. Below an hour a
+    /// bare "showing last value" is honest enough; above it, the age is the
+    /// thing the user needs to know.
+    /// Internal so the boundary tests assert around this exact value.
+    nonisolated static let ageWorthNaming: TimeInterval = 3600
+
+    /// True once a cached snapshot is too old to stand in for a live one. A
+    /// snapshot with no stamp was cached by a build that didn't record one, so
+    /// its age is unknowable — treat it as expired rather than trust it.
+    /// Exposed for tests.
+    nonisolated static func isExpired(_ usage: ProviderUsage, now: Date = .now) -> Bool {
+        guard let captured = usage.capturedAt else { return true }
+        return now.timeIntervalSince(captured) >= maxStaleAge
+    }
+
     /// Prefer fresh windows. For a *retryable* failure (e.g. a throttled endpoint)
-    /// keep showing the last good snapshot rather than blanking the row. A
-    /// *non-retryable* failure (signed out, account/config mismatch) means the old
-    /// values are no longer trustworthy, so drop them and surface the error.
+    /// keep showing the last good snapshot rather than blanking the row, as long
+    /// as it's recent enough to still mean something. A *non-retryable* failure
+    /// (signed out, account/config mismatch) means the old values are no longer
+    /// trustworthy, so drop them and surface the error.
     private func resolve(_ fresh: ProviderUsage, name: String) -> ProviderUsage {
         if !fresh.allWindows.isEmpty {
-            states[name, default: .init()].lastGood = fresh
+            var stamped = fresh
+            stamped.capturedAt = .now
+            states[name, default: .init()].lastGood = stamped
+            states[name]?.lastFailureReason = nil
+            return stamped
+        }
+        // Remember why the fetch failed so back-off passes can re-word the
+        // carried-forward row without fetching again.
+        states[name, default: .init()].lastFailureReason =
+            fresh.retryable ? (fresh.error ?? "unavailable") : nil
+        guard fresh.retryable, let prev = states[name]?.lastGood,
+            let captured = prev.capturedAt, !Self.isExpired(prev)
+        else {
+            states[name]?.lastGood = nil  // no stale data for hard or aged-out failures
             return fresh
         }
-        guard fresh.retryable, let prev = states[name]?.lastGood else {
-            states[name]?.lastGood = nil  // no stale data for hard failures
-            return fresh
-        }
-        // Carry the actual reason through rather than always saying "throttled":
-        // a fetch that timed out is a different thing to explain than an
-        // endpoint that turned us away, and the row is the only place it shows.
-        return ProviderUsage(
+        return carryForward(
+            reason: fresh.error ?? "unavailable", prev: prev, captured: captured,
+            freshPlan: fresh.plan)
+    }
+
+    /// The row shown when a fetch fails but a recent snapshot exists: the old
+    /// numbers under a note carrying the actual failure reason — a fetch that
+    /// timed out is a different thing to explain than an endpoint that turned
+    /// us away — and, once it matters, their age.
+    private func carryForward(
+        reason: String, prev: ProviderUsage, captured: Date, freshPlan: String? = nil
+    ) -> ProviderUsage {
+        ProviderUsage(
             name: prev.name,
             pools: prev.pools,
-            error: "\(fresh.error ?? "unavailable") — showing last value",
-            plan: prev.plan ?? fresh.plan,
-            retryable: true
+            error: "\(reason) — \(Self.staleNote(captured))",
+            plan: prev.plan ?? freshPlan,
+            retryable: true,
+            capturedAt: prev.capturedAt
         )
+    }
+
+    /// Recomputes a carried-forward row against the current clock on passes
+    /// where its provider isn't fetched. The note was worded at resolve time; a
+    /// provider sitting in back-off (up to 15 minutes between attempts) would
+    /// otherwise keep asserting a frozen age — and could ride `lastResolved`
+    /// past the 24h cap that resolve enforces. Returns nil for any row that
+    /// isn't a carried-forward stale value.
+    private func restaleCarriedForward(_ name: String) -> ProviderUsage? {
+        guard let state = states[name], let reason = state.lastFailureReason,
+            let shown = state.lastResolved, shown.error != nil, !shown.allWindows.isEmpty
+        else { return nil }
+        guard let prev = state.lastGood, let captured = prev.capturedAt, !Self.isExpired(prev)
+        else {
+            // Aged out mid-back-off: drop to the bare failure the next fetch
+            // would produce, rather than showing day-old numbers as current.
+            states[name]?.lastGood = nil
+            return .failed(name, reason, retryable: true, plan: shown.plan)
+        }
+        return carryForward(reason: reason, prev: prev, captured: captured)
+    }
+
+    /// How the row describes the value it's standing on: terse while it's fresh,
+    /// explicit about the age once that age is the more useful fact.
+    /// Exposed for tests.
+    nonisolated static func staleNote(_ captured: Date, now: Date = .now) -> String {
+        guard now.timeIntervalSince(captured) >= ageWorthNaming else {
+            return "showing last value"
+        }
+        return "showing value from \(Format.updatedAgo(captured, now: now))"
     }
 }

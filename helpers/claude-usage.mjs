@@ -189,10 +189,19 @@ async function main() {
   const limits = snap?.rate_limits;
   const subscription = snap?.subscription_type ?? snap?.subscriptionType ?? null;
   if (!limits || typeof limits !== "object") {
-    // rate_limits_available:true but rate_limits:null means the usage endpoint
-    // is momentarily throttled — a soft, retryable state, not a hard failure.
+    // rate_limits_available:true but rate_limits:null — the CLI has a claude.ai
+    // profile but the usage endpoint gave us nothing. Two causes look identical
+    // from out here: a momentary throttle, or a signed-out/expired session.
+    // Signing out leaves the cached `oauthAccount` (and so the subscription
+    // type) behind in ~/.claude.json, so a known plan is no proof of a live
+    // token — name the fixable cause instead of blaming the endpoint. Stays a
+    // soft, retryable state so a real throttle keeps the last good numbers.
     if (snap?.rate_limits_available) {
-      return fail("Usage temporarily throttled", "throttled", subscription);
+      return fail(
+        "Usage unavailable — run /login in Claude Code if it persists",
+        "unavailable",
+        subscription,
+      );
     }
     // rate_limits_available:false — the SDK says plan limits don't apply to
     // this session (API key, Bedrock, or Vertex) or the OAuth token is

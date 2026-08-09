@@ -65,7 +65,13 @@ enum ClaudeClient {
         if (root["ok"] as? Bool) != true {
             let msg = (root["error"] as? String) ?? "Claude usage unavailable"
             let code = root["code"] as? String
-            if code == "throttled" {
+            // The usage endpoint returned nothing — a throttle or a stale
+            // sign-in, which the helper can't tell apart. Retryable so the row
+            // keeps showing the last good numbers while it resolves itself.
+            // Must be matched before the sign-in heuristic below: the message
+            // mentions "/login", which that heuristic would misread as a hard
+            // signed-out state and wipe the cached values.
+            if code == "unavailable" {
                 return .failed("Claude", msg, retryable: true, plan: plan)
             }
             // rate_limits_available:false — plan limits don't apply to this
@@ -90,7 +96,14 @@ enum ClaudeClient {
                     "Claude", "Sign in to Claude Code to track usage.",
                     url: SetupDetection.claudeCodeURL, plan: plan)
             }
-            return .failed("Claude", msg, retryable: false, plan: plan)
+            // Everything unrecognized — the helper's watchdog timeout, a
+            // rate-limited endpoint, codes a newer helper may add — is treated
+            // as transient. Retryable errs toward keeping the last good
+            // snapshot, and a snapshot standing in for a genuinely dead state
+            // costs little: it ages out within a day regardless. The states
+            // where old numbers must go (signed out, no plan) are all matched
+            // above.
+            return .failed("Claude", msg, retryable: true, plan: plan)
         }
 
         guard let limits = root["rate_limits"] as? [String: Any] else {

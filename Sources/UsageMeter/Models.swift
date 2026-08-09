@@ -53,9 +53,14 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
     /// (no nudge to install something they didn't ask for). Not persisted: only
     /// successful, windowed snapshots are cached, and those are always detected.
     var detected: Bool = true
+    /// When these windows were actually fetched. Stamped by the store as it
+    /// caches a windowed snapshot, and persisted with it, so a value carried
+    /// forward past a failed refresh can say how old it is — and be dropped
+    /// once it's too old to describe anything current.
+    var capturedAt: Date? = nil
 
     private enum CodingKeys: String, CodingKey {
-        case name, pools, error, plan, retryable, setup
+        case name, pools, error, plan, retryable, setup, capturedAt
     }
 
     var allWindows: [UsageWindow] { pools.flatMap { $0.windows } }

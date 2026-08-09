@@ -9,7 +9,7 @@ struct SetupDetectionTests {
         #expect(SetupDetection.looksLikeMissingTool("spawn codex ENOENT"))
         #expect(SetupDetection.looksLikeMissingTool("command not found: node"))
         #expect(SetupDetection.looksLikeMissingTool("Claude Agent SDK not found: ..."))
-        #expect(!SetupDetection.looksLikeMissingTool("Usage temporarily throttled"))
+        #expect(!SetupDetection.looksLikeMissingTool("Usage unavailable — run /login"))
     }
 
     @Test("not-signed-in phrases are recognized")
