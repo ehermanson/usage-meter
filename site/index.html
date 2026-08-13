@@ -56,14 +56,19 @@
       <div class="mockup-wrap">
         <!-- A slice of the macOS menu bar, with the Usage Meter item open. -->
         <div class="menubar" aria-hidden="true">
-          <!-- Our menu extra, highlighted because its dropdown is open. -->
+          <!-- Our menu extra, highlighted because its dropdown is open. The item
+               is a brand mark inside a ring that tracks the 5-hour window, then
+               the windows as styled runs: dim label, loud value. -->
           <span class="mb-app is-open">
-            <svg class="gauge" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3.2 15.2a8 8 0 1 1 13.6 0"></path>
-              <path d="M10 10.6 13.6 7"></path>
-              <circle cx="10" cy="10.6" r="1.15" fill="currentColor" stroke="none"></circle>
-            </svg>
-            <span class="mb-title">Claude&nbsp;&nbsp;5h 84% · Wk 92%</span>
+            <span class="ring" style="--pct: 84; --ring: #fcad37">
+              <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke-linecap="round">
+                <circle class="ring-track" cx="10" cy="10" r="8.8"></circle>
+                <circle class="ring-fill" cx="10" cy="10" r="8.8"></circle>
+              </svg>
+              <img class="ring-mark" src="claude-logo.png" alt="" width="10" height="10">
+            </span>
+            <span class="mb-run"><span class="mb-lab">5h</span><span class="mb-val">84%</span></span>
+            <span class="mb-run"><span class="mb-lab">Wk</span><span class="mb-val is-second">92%</span></span>
           </span>
 
           <!-- The system menu extras, pinned to the right like the real bar. -->
@@ -157,27 +162,37 @@
             </div>
           </div>
 
+          <!-- Settings, in the app's two titled groups: what the menu-bar item
+               shows, then everything else. -->
           <div class="card settings">
-            <div class="s-title">Settings</div>
-            <div class="s-row">
-              <span class="s-label">Menu bar</span>
-              <span class="s-menu">Claude<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+            <div class="s-group">
+              <div class="s-title">Menu Bar</div>
+              <div class="s-row">
+                <span class="s-label">Provider</span>
+                <span class="s-menu">Auto (highest)<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+              </div>
+              <div class="s-row">
+                <span class="s-label">Style</span>
+                <span class="s-menu">5hr and weekly<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+              </div>
+              <div class="s-row">
+                <span class="s-label">Show remaining</span>
+                <span class="sw" role="switch" aria-checked="false"></span>
+              </div>
             </div>
-            <div class="s-row">
-              <span class="s-label">Compact (5hr only)</span>
-              <span class="sw" role="switch" aria-checked="false"></span>
-            </div>
-            <div class="s-row">
-              <span class="s-label">Show % remaining</span>
-              <span class="sw" role="switch" aria-checked="false"></span>
-            </div>
-            <div class="s-row">
-              <span class="s-label">Launch at Login</span>
-              <span class="sw is-on" role="switch" aria-checked="true"></span>
-            </div>
-            <div class="s-row">
-              <span class="s-label">Claude config</span>
-              <span class="s-menu">Auto<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+
+            <div class="s-div"></div>
+
+            <div class="s-group">
+              <div class="s-title">General</div>
+              <div class="s-row">
+                <span class="s-label">Launch at Login</span>
+                <span class="sw is-on" role="switch" aria-checked="true"></span>
+              </div>
+              <div class="s-row">
+                <span class="s-label">Claude config</span>
+                <span class="s-menu">Auto<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+              </div>
             </div>
           </div>
 
@@ -188,7 +203,10 @@
                 <path d="M13 3v2.6h-2.6"></path>
               </svg>
             </span>
-            <span class="pf-quit">Quit</span>
+            <span class="pf-end">
+              <span class="pf-version">v1.5.1</span>
+              <span class="pf-quit">Quit</span>
+            </span>
           </div>
         </div>
       </div>
@@ -200,13 +218,19 @@
         <details class="faq-item" open>
           <summary>Why would I want this?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
-            <p>Most coding tools bury your rate-limit usage behind a menu or a command, and if you use more than one, you're checking each separately. Usage Meter keeps every provider's current usage and reset time in your menu bar. Bars turn yellow at 75% and red at 90%, so you can pace your work or switch tools before you hit the wall.</p>
+            <p>Most coding tools bury your rate-limit usage behind a menu or a command, and if you use more than one, you're checking each separately. Usage Meter keeps every provider's current usage and reset time in your menu bar. The ring runs green to amber to red as a window fills, and the bars in the dropdown turn yellow at 75% and red at 90%, so you can pace your work or switch tools before you hit the wall.</p>
           </div>
         </details>
         <details class="faq-item">
           <summary>Which tools does it track?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
             <p>Claude Code, Codex, and Gemini (via Antigravity or the Gemini CLI). For each one it shows the rate-limit windows, 5-hour and weekly, as percent used with the time until they reset.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary>What does the menu-bar item show?<span class="faq-mark" aria-hidden="true"></span></summary>
+          <div class="faq-a">
+            <p>The tool's own mark inside a ring that fills as its 5-hour window is used, then the numbers beside it. It follows whichever provider is closest to its limit unless you pin one, and you can trim it down to the 5-hour figure, to a bare ring, or spread it out to one ring per provider. The full picture is always a click away in the dropdown.</p>
           </div>
         </details>
         <details class="faq-item">

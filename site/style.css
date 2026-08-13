@@ -372,11 +372,11 @@ h1 { animation-delay: 0.06s; }
   .mockup-wrap::before { opacity: 0.22; filter: blur(52px); }
 }
 
-/* A slice of the macOS menu bar. Our menu extra shows the app's real title
-   (gauge + highest 5h · weekly) and reads as "open" (highlighted) and is
-   centered so the panel descends from directly beneath it; the system extras
-   sit at the right, absolutely positioned so they don't shift that centering.
-   Everything is monochrome, like the real menu bar. */
+/* A slice of the macOS menu bar. Our menu extra shows the app's real item (the
+   provider's mark inside a usage ring, then 5h and weekly), reads as "open"
+   (highlighted), and is centered so the panel descends from directly beneath
+   it; the system extras sit at the right, absolutely positioned so they don't
+   shift that centering. Monochrome apart from the ring, like the real item. */
 .menubar {
   position: relative;
   z-index: 2;
@@ -409,6 +409,7 @@ h1 { animation-delay: 0.06s; }
 .mb-app {
   display: inline-flex;
   align-items: center;
+  /* The gap the app leaves between the ring and the text it labels. */
   gap: 6px;
   height: 22px;
   padding: 0 9px;
@@ -418,8 +419,70 @@ h1 { animation-delay: 0.06s; }
   margin-right: auto;
   border-radius: 6px;
 }
-.mb-app .gauge { display: block; }
-.mb-title { letter-spacing: -0.01em; }
+
+/* The usage ring: a closed hairline track with the arc sweeping clockwise from
+   12 o'clock, the provider's mark centered inside. The arc is the one place the
+   item carries color — it runs a continuous green → amber → red ramp, so `--ring`
+   is set per instance to wherever the mockup's usage lands on it. */
+.ring {
+  position: relative;
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.ring svg {
+  display: block;
+  /* Start the stroke at the top rather than at 3 o'clock. */
+  transform: rotate(-90deg);
+}
+.ring-track {
+  stroke: currentColor;
+  opacity: 0.18;
+  stroke-width: 2.2;
+}
+.ring-fill {
+  stroke: var(--ring);
+  stroke-width: 2.2;
+  /* r = 8.8 → circumference 55.29. */
+  stroke-dasharray: calc(var(--pct) * 0.5529) 55.29;
+}
+.ring-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  /* Tinted to the menu bar's ink, like the app's template rendering. */
+  filter: invert(1);
+}
+@media (prefers-color-scheme: light) {
+  .ring-mark { filter: none; }
+}
+
+/* Label and value stay tight together; the wider gap falls between groups. */
+.mb-run {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+/* Emphasis travels by size, weight, and alpha, never color — the same
+   hierarchy holds against any menu-bar background. */
+.mb-lab {
+  font-size: 10px;
+  opacity: 0.55;
+}
+.mb-val {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.mb-val.is-second {
+  font-weight: 500;
+  opacity: 0.75;
+}
 /* Open menu extra: the neutral rounded highlight macOS draws behind it. */
 .mb-app.is-open {
   background: color-mix(in srgb, var(--text) 16%, transparent);
@@ -561,8 +624,20 @@ h1 { animation-delay: 0.06s; }
   .fill { animation: none; }
 }
 
-/* Settings card — label left, control right, System Settings-style. */
-.settings { gap: 11px; }
+/* Settings card — label left, control right, System Settings-style, split into
+   titled groups so "which provider is shown" and "start at login" don't read as
+   the same kind of decision. */
+.settings { gap: 10px; }
+.s-group {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.s-div {
+  height: 1px;
+  background: color-mix(in srgb, var(--text-2) 40%, transparent);
+  opacity: 0.4;
+}
 .s-title {
   font-size: 9px;
   font-weight: 600;
@@ -623,6 +698,10 @@ h1 { animation-delay: 0.06s; }
 }
 .pf-updated { display: inline-flex; align-items: center; gap: 5px; }
 .pf-refresh { display: block; opacity: 0.85; }
+/* The running version sits quietly beside Quit, so a just-installed update is
+   verifiable at a glance. */
+.pf-end { display: inline-flex; align-items: center; gap: 10px; }
+.pf-version { opacity: 0.65; }
 
 /* FAQ — a single machined panel with hairline-divided disclosure rows. Reads
    like documentation, not marketing. */
