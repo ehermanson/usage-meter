@@ -52,7 +52,12 @@ enum GeminiClient {
             let buckets = try await retrieveQuota(token: token, project: project)
             return parse(buckets)
         } catch let error as GeminiError {
-            if error.notDetected {
+            // No credentials at all, or an account the backend won't serve
+            // (403: "You do not have a valid license of this product…") — either
+            // way the user doesn't use Gemini here, so the section is hidden.
+            // A license the user can't fix from this app is not something to
+            // keep explaining under their other providers.
+            if error.notDetected || error.status == 403 {
                 return .notDetected(providerName)
             }
             if error.setupNeeded {

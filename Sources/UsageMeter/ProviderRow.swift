@@ -22,46 +22,23 @@ struct ProviderRow: View {
     private let logoSize: CGFloat = 14
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Center the logo, name, and plan badge on a shared optical midline.
-            // A plain `.center` HStack aligns frame centers, and the badge's
-            // capsule padding leaves it sitting visibly low next to the name;
-            // `.rowMid` lines up the text's cap-height center instead.
-            HStack(alignment: .rowMid, spacing: 6) {
-                if let logo = logoImage {
-                    Image(nsImage: logo)
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: logoSize, height: logoSize)
-                        .foregroundStyle(.primary)
-                        .alignmentGuide(.rowMid) { $0.height / 2 }
-                        .accessibilityHidden(true)
-                } else {
-                    Circle()
-                        .fill(accent)
-                        .frame(width: 7, height: 7)
-                        .alignmentGuide(.rowMid) { $0.height / 2 }
-                        .accessibilityHidden(true)
-                }
-                Text(provider.name)
-                    .font(.system(size: 12, weight: .semibold))
-                if let plan = provider.plan {
-                    Text(plan)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Color.secondary.opacity(0.15), in: Capsule())
-                }
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            header
 
-            ForEach(provider.pools) { pool in
+            ForEach(Array(provider.pools.enumerated()), id: \.element.id) { index, pool in
                 if let title = pool.title {
+                    // A named pool is a section inside the card, and dresses
+                    // like one: a hairline off the pool above, then a small
+                    // heading. Model names keep their own case — uppercased,
+                    // "GPT-5.3-CODEX-SPARK" reads like an error code.
+                    if index > 0 {
+                        Divider().opacity(0.4).padding(.top, 2)
+                    }
                     Text(title)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .padding(.top, 2)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(pool.windows) { window in
@@ -74,6 +51,7 @@ struct ProviderRow: View {
             // stays up through the outcome note even if the last credit was
             // just spent, so the verdict has somewhere to land.
             if provider.hasWindows, provider.resetCredits != nil || resetState != .idle {
+                Divider().opacity(0.4).padding(.top, 2)
                 resetLine
             }
 
@@ -84,10 +62,47 @@ struct ProviderRow: View {
             } else if let note = provider.error {
                 // A note shown alongside windows means we're displaying a stale
                 // value; with no windows it's a hard error.
-                Text(note)
-                    .font(.system(size: 10))
-                    .foregroundStyle(provider.allWindows.isEmpty ? .red : .orange)
-                    .fixedSize(horizontal: false, vertical: true)
+                if provider.allWindows.isEmpty {
+                    callout(note, systemImage: "exclamationmark.triangle", tint: .red)
+                } else {
+                    callout(note, systemImage: "clock.arrow.circlepath", tint: .orange)
+                }
+            }
+        }
+    }
+
+    /// Logo, name, and plan badge on a shared optical midline. A plain
+    /// `.center` HStack aligns frame centers, and the badge's capsule padding
+    /// leaves it sitting visibly low next to the name; `.rowMid` lines up the
+    /// text's cap-height center instead.
+    private var header: some View {
+        HStack(alignment: .rowMid, spacing: 6) {
+            if let logo = logoImage {
+                Image(nsImage: logo)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: logoSize, height: logoSize)
+                    .foregroundStyle(.primary)
+                    .alignmentGuide(.rowMid) { $0.height / 2 }
+                    .accessibilityHidden(true)
+            } else {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 7, height: 7)
+                    .alignmentGuide(.rowMid) { $0.height / 2 }
+                    .accessibilityHidden(true)
+            }
+            Text(provider.name)
+                .font(.system(size: 12, weight: .semibold))
+            if let plan = provider.plan {
+                Text(plan)
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1.5)
+                    .background(Color.primary.opacity(0.07), in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.06)))
             }
         }
     }
@@ -123,8 +138,8 @@ struct ProviderRow: View {
                             // has to share its width with the button.
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(Format.resetCredits(credits))
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.primary.opacity(0.85))
                                 if let expiry = Format.resetCreditExpiry(credits) {
                                     Text(expiry)
                                         .font(.system(size: 10))
@@ -151,15 +166,14 @@ struct ProviderRow: View {
                 }
             }
         }
-        .padding(.top, 2)
         // A confirm left open across a redeem or a refetch shouldn't linger.
         .onChange(of: resetState) { _, _ in confirmingReset = false }
         .onChange(of: provider.resetCredits) { _, _ in confirmingReset = false }
     }
 
-    /// The reset spends a finite credit and can't be undone, so it takes a
-    /// second, deliberate click. The destructive choice is the prominent one
-    /// only because it's the one the user just asked for; Cancel sits first.
+    /// The reset spends a finite credit, so it takes a second, deliberate
+    /// click. The prominent button is the one the user just asked for; Cancel
+    /// sits first.
     private func resetConfirm(_ credits: ResetCredits) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(
@@ -186,16 +200,52 @@ struct ProviderRow: View {
 
     @ViewBuilder
     private func setupHint(_ setup: SetupHint) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(setup.message)
-                .font(.system(size: 10))
+        calloutSurface(tint: .secondary) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let urlString = setup.url, let url = URL(string: urlString) {
-                Link("Set up ↗", destination: url)
-                    .font(.system(size: 10, weight: .medium))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(setup.message)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let urlString = setup.url, let url = URL(string: urlString) {
+                    Link("Set up ↗", destination: url)
+                        .font(.system(size: 10, weight: .medium))
+                }
             }
         }
+    }
+
+    /// A note with an icon on a faint tinted surface: a hard error, or the
+    /// "showing last value" caveat under carried-forward numbers. Long backend
+    /// messages are clipped to a few lines so one bad reply can't take over
+    /// the card; the whole text stays a hover away.
+    private func callout(_ text: String, systemImage: String, tint: Color) -> some View {
+        calloutSurface(tint: tint) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(tint)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .help(text)
+    }
+
+    private func calloutSurface(
+        tint: Color, @ViewBuilder content: () -> some View
+    ) -> some View {
+        HStack(alignment: .top, spacing: 6) { content() }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     /// The provider's bundled brand logo, loaded once as a tintable template

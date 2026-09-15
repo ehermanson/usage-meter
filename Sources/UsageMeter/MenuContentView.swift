@@ -36,8 +36,11 @@ struct MenuContentView: View {
 
             settingsCard
 
+            // The update notice gets its own card so it reads as a notice
+            // rather than a stray button between the settings and the footer.
             if let update = updates.availableUpdate {
                 updateRow(update)
+                    .cardSurface()
             }
 
             footer
@@ -310,24 +313,35 @@ struct MenuContentView: View {
         }
     }
 
+    /// What's available on the left, the one action on the right — a real
+    /// prominent button, so it's the same blue in light and dark rather than
+    /// a tinted text link that goes muddy on a dark surface.
     private func updateButton(_ update: AvailableUpdate) -> some View {
         let seamless = update.zipURL != nil && installer.canInstallInPlace
-        return Button {
-            if seamless {
-                Task { await installer.install(update) }
-            } else {
-                updates.openDownload()
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Update available")
+                    .font(.system(size: 11, weight: .medium))
+                Text("Usage Meter v\(update.version)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
             }
-        } label: {
-            Label("Update to v\(update.version)", systemImage: "arrow.down.circle")
-                .font(.system(size: 11, weight: .medium))
+            Spacer(minLength: 8)
+            Button(seamless ? "Update" : "Download") {
+                if seamless {
+                    Task { await installer.install(update) }
+                } else {
+                    updates.openDownload()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .font(.system(size: 10, weight: .medium))
+            .help(
+                seamless
+                    ? "Downloads, installs, and relaunches — nothing else to do"
+                    : "Download the latest Usage Meter from GitHub")
         }
-        .buttonStyle(.borderless)
-        .controlSize(.small)
-        .help(
-            seamless
-                ? "Downloads, installs, and relaunches — nothing else to do"
-                : "Download the latest Usage Meter from GitHub")
     }
 
     private func updateProgress(_ label: String, fraction: Double?) -> some View {
@@ -439,7 +453,7 @@ extension View {
     /// The panel's shared card treatment: a soft adaptive surface with a
     /// hairline stroke that crisps the edge (mostly visible in light mode).
     func cardSurface() -> some View {
-        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         return
             self
             .padding(10)

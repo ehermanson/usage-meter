@@ -9,7 +9,7 @@ struct WindowBar: View {
     /// style); otherwise show usage consumed and fill the bar.
     var showRemaining: Bool = false
 
-    private let barHeight: CGFloat = 5
+    private let barHeight: CGFloat = 6
 
     var body: some View {
         // Hovering the row reveals the absolute reset moment — the compact
@@ -24,11 +24,13 @@ struct WindowBar: View {
     private var rows: some View {
         VStack(alignment: .leading, spacing: 5) {
             // Label, reset countdown, and percentage share one row so each window
-            // reads as two compact lines instead of three.
-            HStack(spacing: 6) {
+            // reads as two compact lines instead of three. The label carries the
+            // row's identity, so it sits in primary ink; the countdown is the
+            // supporting fact and steps back a shade and a size.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(window.label)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.primary.opacity(0.85))
                 if let reset = window.resetAt {
                     Text(Format.resetDuration(reset))
                         .font(.system(size: 10))
@@ -46,7 +48,7 @@ struct WindowBar: View {
                 // glance, and nothing on the row says which mode is active.
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text(Format.percent(displayedPercent))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .monospacedDigit()
                     Text(showRemaining ? "left" : "used")
                         .font(.system(size: 9))
@@ -56,10 +58,14 @@ struct WindowBar: View {
 
             // A custom capsule instead of `ProgressView(.linear)`: a slightly
             // thicker track with a soft brand-colored gradient fill, so the
-            // panel has some life without abandoning the native material.
+            // panel has some life without abandoning the native material. A
+            // hairline inside the track keeps the empty part from dissolving
+            // into the card on the glass material.
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.primary.opacity(0.08))
+                    Capsule()
+                        .fill(Color.primary.opacity(0.07))
+                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.04)))
                     if barFraction > 0 {
                         Capsule()
                             .fill(barFill)

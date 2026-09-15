@@ -82,7 +82,14 @@ final class StatusBarController {
 
         // Dev affordance: `--open-panel` pops the dropdown right after launch so
         // it can be screenshotted without assistive access to click the item.
+        // `--dark` / `--light` pin the appearance so both can be rendered from
+        // one machine without flipping System Settings.
         let args = ProcessInfo.processInfo.arguments
+        if args.contains("--dark") {
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        } else if args.contains("--light") {
+            NSApp.appearance = NSAppearance(named: .aqua)
+        }
         if args.contains("--open-panel") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 self?.show()
