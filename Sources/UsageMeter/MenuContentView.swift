@@ -196,11 +196,11 @@ struct MenuContentView: View {
                 Button {
                     store.menuBarStyle = style
                 } label: {
-                    pickerRow(style.label, checked: store.menuBarStyle == style)
+                    pickerRow(store.menuBarStyleLabel(style), checked: store.menuBarStyle == style)
                 }
             }
         } label: {
-            Text(store.menuBarStyle.label)
+            Text(store.menuBarStyleLabel(store.menuBarStyle))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }

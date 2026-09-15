@@ -402,6 +402,17 @@ final class UsageStore {
         }
     }
 
+    /// What a style is called in the picker. `.full` is "5hr and weekly" only
+    /// where there *is* a 5hr and a weekly to show; a fixed-budget Enterprise
+    /// plan's lone "Usage" window (or a Gemini-only "Daily") has neither, and
+    /// the same style is then just the number — "Percentage used". The
+    /// used/left switch flips the word with it.
+    func menuBarStyleLabel(_ style: MenuBarStyle) -> String {
+        guard style == .full, !providers.contains(where: { $0.hasWindows && $0.hasDistinctWeekly })
+        else { return style.label }
+        return showRemaining ? "Percentage left" : "Percentage used"
+    }
+
     /// The percentage to show for a window, honoring the used/remaining setting.
     func displayPercent(_ window: UsageWindow) -> Double {
         showRemaining ? window.remainingPercent : window.usedPercent

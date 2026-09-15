@@ -210,6 +210,23 @@ struct MenuBarTitleTests {
     }
 
     @MainActor
+    @Test("the full style is named for what it shows")
+    func fullStyleLabel() {
+        // A 5h/weekly split: the label promises exactly that.
+        withStore(providers: [Self.split(42, 31)]) { store in
+            #expect(store.menuBarStyleLabel(.full) == "5hr and weekly")
+        }
+        // A fixed-budget plan has neither window; the style is just the number,
+        // and the number's direction follows the used/left switch.
+        withStore(providers: [Self.enterprise(6)]) { store in
+            #expect(store.menuBarStyleLabel(.full) == "Percentage used")
+            store.showRemaining = true
+            #expect(store.menuBarStyleLabel(.full) == "Percentage left")
+            #expect(store.menuBarStyleLabel(.ringOnly) == "Ring only")
+        }
+    }
+
+    @MainActor
     @Test("a provider dropping out doesn't strip the style already selected")
     func selectedStyleSurvivesLosingAProvider() {
         // Chosen with two providers, then one signs out or stops reporting. The
