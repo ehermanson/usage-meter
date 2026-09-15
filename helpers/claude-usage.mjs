@@ -144,7 +144,7 @@ function loginShellEnv() {
 // True when this machine is set up to run Claude Code against something other
 // than a claude.ai account: a provider/gateway/API-key var in this process's
 // env or the login shell, an `env` block or `apiKeyHelper` in the config dir's
-// settings files. Used to tell "no plan limits" from "never signed in".
+// settings files. Used to tell "no plan limits" from "not signed in".
 function thirdPartyProviderConfigured(configDir) {
   const isSet = (v) => typeof v === "string" && v.trim() !== "" && v.trim() !== "0";
   const envs = [process.env, loginShellEnv()];
@@ -270,9 +270,10 @@ async function main() {
     }
     // Otherwise there's no plan on record at all. That's what a session
     // pointed at an API key, Bedrock, Vertex, or a gateway looks like — but
-    // it's also exactly what a machine that has simply never signed in looks
-    // like, and the SDK doesn't say which. Only blame a third-party setup
-    // when one is actually configured; otherwise the fix is to sign in.
+    // it's also exactly what a machine with no sign-in looks like (never
+    // signed in, or signed out since), and the SDK doesn't say which. Only
+    // blame a third-party setup when one is actually configured; otherwise
+    // the fix is to sign in.
     if (!thirdPartyProviderConfigured(process.env.CLAUDE_CONFIG_DIR)) {
       return fail("Not signed in to Claude Code", "not_signed_in", subscription);
     }
