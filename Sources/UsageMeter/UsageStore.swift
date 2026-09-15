@@ -167,6 +167,47 @@ final class UsageStore {
         return (provider.accent, provider.logoResource)
     }
 
+    // MARK: - Reset credits
+
+    /// Where a redeem stands. The note is what the row says once it's over —
+    /// "Limits reset", or why nothing happened — and clears itself shortly
+    /// after, so a stale verdict doesn't sit under the bars forever.
+    enum ResetState: Equatable {
+        case idle
+        case redeeming
+        case note(String)
+    }
+    var codexReset: ResetState = .idle
+    private var resetNoteToken = 0
+
+    /// Spends one of Codex's free reset credits, then refetches so the bars
+    /// show the result rather than the numbers the reset just wiped. The
+    /// confirmation lives in the view: by the time this runs, the user has
+    /// agreed to spend the credit.
+    func redeemCodexReset() async {
+        guard codexReset != .redeeming else { return }
+        codexReset = .redeeming
+        let note: String
+        do {
+            switch try await CodexClient.consumeResetCredit() {
+            case .reset: note = "Limits reset"
+            case .nothingToReset: note = "Nothing to reset right now — no credit used"
+            case .noCredit: note = "No reset credits left"
+            case .alreadyRedeemed: note = "Already reset"
+            }
+        } catch {
+            note = "Couldn't reset: \(error.localizedDescription)"
+        }
+        await refresh(force: true)
+        codexReset = .note(note)
+        resetNoteToken &+= 1
+        let token = resetNoteToken
+        Task {
+            try? await Task.sleep(for: .seconds(12))
+            if resetNoteToken == token, case .note = codexReset { codexReset = .idle }
+        }
+    }
+
     private var timer: Timer?
 
     /// The in-flight refresh, so concurrent callers coalesce instead of being

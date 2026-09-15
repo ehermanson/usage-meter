@@ -4,7 +4,11 @@ import Foundation
 /// freshly spawned `codex app-server --listen stdio://` subprocess:
 ///   1. initialize
 ///   2. initialized (notification)
-///   3. account/rateLimits/read  -> primary (5h) + secondary (weekly)
+///   3. account/rateLimits/read  -> primary (5h) + secondary (weekly), plus any
+///      free reset credits the account holds
+///
+/// The same conversation, ending in `account/rateLimitResetCredit/consume`
+/// instead, redeems one of those credits.
 enum CodexClient {
     static func fetch() async -> ProviderUsage {
         guard let codex = findCodex() else {
@@ -13,7 +17,8 @@ enum CodexClient {
             return .notDetected("Codex")
         }
         do {
-            let result = try await exchange(codexPath: codex)
+            let result = try await exchange(
+                codexPath: codex, method: "account/rateLimits/read", params: nil)
             return parse(result)
         } catch {
             let msg = error.localizedDescription
@@ -27,11 +32,53 @@ enum CodexClient {
         }
     }
 
+    /// What the backend did with a redeem request.
+    enum ResetOutcome: String {
+        /// A credit was spent and the eligible windows were cleared.
+        case reset
+        /// Nothing was near enough a limit to reset; no credit was spent.
+        case nothingToReset
+        /// The account had no credit left to spend.
+        case noCredit
+        /// This attempt's idempotency key had already gone through.
+        case alreadyRedeemed
+    }
+
+    /// Redeems the next available reset credit. The backend picks which credit
+    /// (`creditId` is left out) and which windows are eligible; the app only
+    /// learns the outcome. Throws when the CLI is missing or the RPC fails.
+    static func consumeResetCredit() async throws -> ResetOutcome {
+        guard let codex = findCodex() else {
+            throw NSError(
+                domain: "Codex", code: -4,
+                userInfo: [NSLocalizedDescriptionKey: "Codex CLI not found"])
+        }
+        // A fresh key per attempt: the app never retries a redeem on its own,
+        // so the user's second click is a second attempt, not a replay.
+        let result = try await exchange(
+            codexPath: codex, method: "account/rateLimitResetCredit/consume",
+            params: ["idempotencyKey": UUID().uuidString])
+        guard let raw = result["outcome"] as? String, let outcome = ResetOutcome(rawValue: raw)
+        else {
+            throw NSError(
+                domain: "Codex", code: -5,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Unexpected reset outcome: \(result["outcome"] ?? "none")"
+                ])
+        }
+        return outcome
+    }
+
     // MARK: - JSON-RPC exchange
 
-    private static func exchange(codexPath: String) async throws -> [String: Any] {
+    private static func exchange(
+        codexPath: String, method: String, params: [String: Any]?
+    ) async throws -> [String: Any] {
         try await withCheckedThrowingContinuation { continuation in
-            let session = CodexRPCSession(codexPath: codexPath, continuation: continuation)
+            let session = CodexRPCSession(
+                codexPath: codexPath, method: method, params: params,
+                continuation: continuation)
             session.start()
         }
     }
@@ -87,7 +134,29 @@ enum CodexClient {
         // pools (including GPT-5.6 Sol/Terra/Luna) commonly begin at the same 0%
         // utilization and reset time but diverge as soon as those models are used.
         if pools.isEmpty { return .failed("Codex", "No windows", plan: plan) }
-        return .ok("Codex", pools: pools, plan: plan)
+        return .ok(
+            "Codex", pools: pools, plan: plan,
+            resetCredits: resetCredits(from: root["rateLimitResetCredits"]))
+    }
+
+    /// The account's free resets, from the `rateLimitResetCredits` summary:
+    /// `{ availableCount, credits: [{ status, expiresAt, … }] | null }`. The
+    /// detail list is optional and may be capped short of the count, so the
+    /// count is the truth and the list only contributes the soonest expiry.
+    /// Nil when there's nothing to redeem — a zero shouldn't take up a row.
+    static func resetCredits(from raw: Any?) -> ResetCredits? {
+        guard let d = raw as? [String: Any],
+            let count = Parse.num(d["availableCount"] ?? d["available_count"]),
+            count > 0
+        else { return nil }
+        let entries = (d["credits"] as? [[String: Any]]) ?? []
+        let earliest =
+            entries
+            .filter { ($0["status"] as? String ?? "available") == "available" }
+            .compactMap { Parse.num($0["expiresAt"] ?? $0["expires_at"]) }
+            .min()
+            .map { Date(timeIntervalSince1970: $0) }
+        return ResetCredits(available: Int(count), earliestExpiry: earliest)
     }
 
     /// The default "codex" pool gets no subheader; named pools show their label.
@@ -144,9 +213,12 @@ enum CodexClient {
     }
 }
 
-/// Drives one short-lived JSON-RPC conversation with `codex app-server`.
+/// Drives one short-lived JSON-RPC conversation with `codex app-server`: the
+/// initialize handshake, then a single `method` call whose result is returned.
 private final class CodexRPCSession {
     private let codexPath: String
+    private let method: String
+    private let params: [String: Any]?
     private let continuation: CheckedContinuation<[String: Any], Error>
     private let process = Process()
     private let inPipe = Pipe()
@@ -156,8 +228,13 @@ private final class CodexRPCSession {
     private var finished = false
     private let lock = NSLock()
 
-    init(codexPath: String, continuation: CheckedContinuation<[String: Any], Error>) {
+    init(
+        codexPath: String, method: String, params: [String: Any]?,
+        continuation: CheckedContinuation<[String: Any], Error>
+    ) {
         self.codexPath = codexPath
+        self.method = method
+        self.params = params
         self.continuation = continuation
     }
 
@@ -227,10 +304,12 @@ private final class CodexRPCSession {
             return  // notification or request from server — ignore
         }
         switch id {
-        case 1:  // initialize response -> notify + ask for rate limits
+        case 1:  // initialize response -> notify + make the real call
             send(["jsonrpc": "2.0", "method": "initialized"])
-            send(["jsonrpc": "2.0", "id": 2, "method": "account/rateLimits/read"])
-        case 2:  // rateLimits response
+            var call: [String: Any] = ["jsonrpc": "2.0", "id": 2, "method": method]
+            if let params { call["params"] = params }
+            send(call)
+        case 2:  // the call's response
             if let err = msg["error"] as? [String: Any] {
                 let m = (err["message"] as? String) ?? "RPC error"
                 finish(
@@ -245,7 +324,7 @@ private final class CodexRPCSession {
                     .failure(
                         NSError(
                             domain: "Codex", code: -3,
-                            userInfo: [NSLocalizedDescriptionKey: "Empty rate-limit result"])))
+                            userInfo: [NSLocalizedDescriptionKey: "Empty result from \(method)"])))
             }
         default:
             break

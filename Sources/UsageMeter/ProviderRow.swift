@@ -10,6 +10,12 @@ struct ProviderRow: View {
     let logoResource: String?
     /// Show headroom left instead of usage consumed.
     var showRemaining: Bool = false
+    /// Where a free-reset redeem stands for this provider, and how to start
+    /// one. Only providers that hand out reset credits get a `redeem`.
+    var resetState: UsageStore.ResetState = .idle
+    var redeem: (() -> Void)? = nil
+    /// The "are you sure?" step between the button and the redeem.
+    @State private var confirmingReset = false
 
     /// Source logos are pre-trimmed to their opaque bounds, so a single frame
     /// renders both marks at the same visual size.
@@ -64,6 +70,13 @@ struct ProviderRow: View {
                 }
             }
 
+            // Free resets sit right under the bars they can wipe. The line
+            // stays up through the outcome note even if the last credit was
+            // just spent, so the verdict has somewhere to land.
+            if provider.hasWindows, provider.resetCredits != nil || resetState != .idle {
+                resetLine
+            }
+
             // A provider that just needs setup (tool missing / not signed in) is
             // an expected state, not a failure — show a calm, actionable hint.
             if let setup = provider.setup, provider.allWindows.isEmpty {
@@ -76,6 +89,98 @@ struct ProviderRow: View {
                     .foregroundStyle(provider.allWindows.isEmpty ? .red : .orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// "3 free resets   [Reset now]". A click swaps the
+    /// line for an inline confirm rather than a modal: the panel is a
+    /// non-activating menu, and a modal alert can't take key status from it —
+    /// AppKit just beeps. The line then shows the redeem's progress and its
+    /// outcome in the same spot.
+    @ViewBuilder
+    private var resetLine: some View {
+        Group {
+            switch resetState {
+            case .redeeming:
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text("Resetting…")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            case .note(let note):
+                Text(note)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            case .idle:
+                if let credits = provider.resetCredits {
+                    if confirmingReset {
+                        resetConfirm(credits)
+                    } else {
+                        HStack(spacing: 6) {
+                            // Count over expiry, two short lines: stacked, neither
+                            // has to share its width with the button.
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(Format.resetCredits(credits))
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                                if let expiry = Format.resetCreditExpiry(credits) {
+                                    Text(expiry)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.tertiary)
+                                        .help(
+                                            credits.earliestExpiry.map {
+                                                $0.formatted(date: .long, time: .shortened)
+                                            } ?? "")
+                                }
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 4)
+                            if redeem != nil {
+                                Button("Reset now") { confirmingReset = true }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .help(
+                                        "Spend one free reset to clear your current "
+                                            + "\(provider.name) limits")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.top, 2)
+        // A confirm left open across a redeem or a refetch shouldn't linger.
+        .onChange(of: resetState) { _, _ in confirmingReset = false }
+        .onChange(of: provider.resetCredits) { _, _ in confirmingReset = false }
+    }
+
+    /// The reset spends a finite credit and can't be undone, so it takes a
+    /// second, deliberate click. The destructive choice is the prominent one
+    /// only because it's the one the user just asked for; Cancel sits first.
+    private func resetConfirm(_ credits: ResetCredits) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(
+                "Spend 1 of \(credits.available) free reset\(credits.available == 1 ? "" : "s")? "
+                    + "This clears your current \(provider.name) limits."
+            )
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                Button("Cancel") { confirmingReset = false }
+                    .buttonStyle(.bordered)
+                Button("Reset") {
+                    confirmingReset = false
+                    redeem?()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .controlSize(.small)
+            .font(.system(size: 10, weight: .medium))
         }
     }
 

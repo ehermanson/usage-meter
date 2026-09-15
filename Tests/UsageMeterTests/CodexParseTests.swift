@@ -95,6 +95,35 @@ struct CodexParseTests {
         #expect(usage.pools.allSatisfy { $0.windows.map(\.label) == ["5h", "Weekly"] })
     }
 
+    @Test("reset credits carry the count and the soonest expiry")
+    func parsesResetCredits() {
+        let root: [String: Any] = [
+            "rateLimits": ["primary": ["usedPercent": 46.0, "windowDurationMins": 10080]],
+            "rateLimitResetCredits": [
+                "availableCount": 3,
+                "credits": [
+                    ["id": "a", "status": "available", "expiresAt": 1_791_079_751],
+                    ["id": "b", "status": "available", "expiresAt": 1_789_949_199],
+                    // Already spent — its expiry mustn't win.
+                    ["id": "c", "status": "redeemed", "expiresAt": 1_700_000_000],
+                ],
+            ],
+        ]
+        let usage = CodexClient.parse(root)
+        #expect(usage.resetCredits?.available == 3)
+        #expect(usage.resetCredits?.earliestExpiry == Date(timeIntervalSince1970: 1_789_949_199))
+    }
+
+    @Test("reset credits survive with only the count, and vanish at zero")
+    func resetCreditsCountOnly() {
+        // `credits: null` — the backend skipped the detail lookup.
+        #expect(
+            CodexClient.resetCredits(from: ["availableCount": 2, "credits": NSNull()])
+                == ResetCredits(available: 2, earliestExpiry: nil))
+        #expect(CodexClient.resetCredits(from: ["availableCount": 0, "credits": []]) == nil)
+        #expect(CodexClient.resetCredits(from: nil) == nil)
+    }
+
     @Test("empty result yields a failure")
     func emptyFails() {
         let usage = CodexClient.parse([:])

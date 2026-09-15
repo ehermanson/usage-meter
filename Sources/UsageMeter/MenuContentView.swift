@@ -25,7 +25,10 @@ struct MenuContentView: View {
                         provider: provider,
                         accent: style.accent,
                         logoResource: style.logoResource,
-                        showRemaining: store.showRemaining
+                        showRemaining: store.showRemaining,
+                        resetState: provider.name == "Codex" ? store.codexReset : .idle,
+                        redeem: provider.name == "Codex"
+                            ? { Task { await store.redeemCodexReset() } } : nil
                     )
                     .cardSurface()
                 }

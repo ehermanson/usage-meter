@@ -35,6 +35,15 @@ struct SetupHint: Equatable, Codable {
     var url: String? = nil  // optional "Set up ↗" link
 }
 
+/// Free rate-limit resets a provider has granted the account (Codex hands
+/// these out periodically). Redeeming one clears the current windows outright,
+/// so the count is worth showing next to the bars it can wipe.
+struct ResetCredits: Equatable, Codable {
+    let available: Int
+    /// When the soonest-expiring credit lapses, if the provider says.
+    var earliestExpiry: Date? = nil
+}
+
 /// Aggregated usage for a single provider.
 struct ProviderUsage: Identifiable, Equatable, Codable {
     var id: String { name }  // one section per provider
@@ -58,9 +67,11 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
     /// forward past a failed refresh can say how old it is — and be dropped
     /// once it's too old to describe anything current.
     var capturedAt: Date? = nil
+    /// Free resets the account can redeem, when the provider offers any.
+    var resetCredits: ResetCredits? = nil
 
     private enum CodingKeys: String, CodingKey {
-        case name, pools, error, plan, retryable, setup, capturedAt
+        case name, pools, error, plan, retryable, setup, capturedAt, resetCredits
     }
 
     var allWindows: [UsageWindow] { pools.flatMap { $0.windows } }
@@ -85,8 +96,11 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
     /// showing both says more than showing one.
     var hasDistinctWeekly: Bool { weekly != nil && weekly?.id != fiveHour?.id }
 
-    static func ok(_ name: String, pools: [UsagePool], plan: String? = nil) -> ProviderUsage {
-        ProviderUsage(name: name, pools: pools, error: nil, plan: plan)
+    static func ok(
+        _ name: String, pools: [UsagePool], plan: String? = nil,
+        resetCredits: ResetCredits? = nil
+    ) -> ProviderUsage {
+        ProviderUsage(name: name, pools: pools, error: nil, plan: plan, resetCredits: resetCredits)
     }
 
     static func failed(
@@ -156,6 +170,24 @@ enum Format {
             return remMins == 0 ? "\(hours)h ago" : "\(hours)h \(remMins)m ago"
         }
         return "\(hours / 24)d ago"
+    }
+
+    /// "3 free resets" — just the count. Short on purpose: it shares a row
+    /// with a button, and a truncated line is worse than a terse one.
+    static func resetCredits(_ credits: ResetCredits) -> String {
+        credits.available == 1 ? "1 free reset" : "\(credits.available) free resets"
+    }
+
+    /// The caption under that count: "First expires Sep 21" / "Expires in
+    /// 5h 2m". Within a day the remaining time says more than the date. Nil
+    /// when the provider didn't say.
+    static func resetCreditExpiry(_ credits: ResetCredits, now: Date = Date()) -> String? {
+        guard let expiry = credits.earliestExpiry else { return nil }
+        let which = credits.available == 1 ? "Expires" : "First expires"
+        if expiry.timeIntervalSince(now) < 24 * 3600 {
+            return "\(which) in \(resetDuration(expiry))"
+        }
+        return "\(which) \(expiry.formatted(.dateTime.month(.abbreviated).day()))"
     }
 
     /// The absolute reset moment for tooltips: "Resets today at 7:00 PM",
