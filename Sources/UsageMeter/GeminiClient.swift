@@ -119,7 +119,11 @@ enum GeminiClient {
             "loadCodeAssist", token: token,
             body: ["metadata": ["pluginType": "GEMINI"]])
         guard let project = json["cloudaicompanionProject"] as? String, !project.isEmpty else {
-            throw GeminiError("No Code Assist project for this account")
+            // The account is signed in but has nothing to meter — no Code
+            // Assist to speak of. Not a fault to explain under the other
+            // providers; the user doesn't use Gemini here, so hide it.
+            throw GeminiError(
+                "No Code Assist project for this account", retryable: false, notDetected: true)
         }
         return project
     }

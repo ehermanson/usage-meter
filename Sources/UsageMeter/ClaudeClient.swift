@@ -75,11 +75,18 @@ enum ClaudeClient {
                 return .failed("Claude", msg, retryable: true, plan: plan)
             }
             // rate_limits_available:false — plan limits don't apply to this
-            // session. `no_scope` (signed into a claude.ai plan, but the OAuth
-            // token predates the profile scope) is fixed by signing in again;
-            // `no_plan` (API key / Bedrock / Vertex) has no limits to show.
+            // session. `not_signed_in` (no plan on record and no third-party
+            // provider configured either) and `no_scope` (signed into a
+            // claude.ai plan, but the OAuth token predates the profile scope)
+            // are both fixed by signing in; `no_plan` (API key / Bedrock /
+            // Vertex) has no limits to show.
             // Both are calm setup states, not red errors — keep the helper's
             // specific message rather than a generic guess.
+            if code == "not_signed_in" {
+                return .needsSetup(
+                    "Claude", "Sign in to Claude Code to track usage.",
+                    url: SetupDetection.claudeCodeURL, plan: plan)
+            }
             if code == "no_scope" || code == "no_plan" {
                 return .needsSetup(
                     "Claude", msg + ".", url: SetupDetection.claudeCodeURL, plan: plan)

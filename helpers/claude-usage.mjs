@@ -53,7 +53,7 @@ async function resolveStartup() {
 // The SDK needs the path to a Claude Code binary. The Swift app finds the user's
 // install (via login-shell PATH) and passes it in USAGE_METER_CLAUDE_BIN; when the
 // helper is run directly during development we fall back to a small PATH probe.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -108,6 +108,59 @@ function resolveConfigDir() {
     /* shell lookup failed */
   }
   return { dir: null, source: "none" };
+}
+
+// The env vars (and settings.json `env` keys) that route Claude Code away
+// from a claude.ai sign-in: a raw API key, a bearer token, a cloud provider,
+// or a gateway. Any one of these set is a session that genuinely has no plan
+// limits to report.
+const THIRD_PARTY_KEYS = [
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_BASE_URL",
+  "CLAUDE_CODE_USE_BEDROCK",
+  "CLAUDE_CODE_USE_VERTEX",
+  "CLAUDE_CODE_USE_FOUNDRY",
+];
+
+// The login shell's environment, for keys a GUI-spawned process never inherits
+// (an `export ANTHROPIC_API_KEY=…` in ~/.zshrc). Read once per run.
+let loginEnv;
+function loginShellEnv() {
+  if (loginEnv) return loginEnv;
+  loginEnv = {};
+  try {
+    const out = execFileSync("/bin/sh", ["-lc", "env"], { encoding: "utf8" });
+    for (const line of out.split("\n")) {
+      const eq = line.indexOf("=");
+      if (eq > 0) loginEnv[line.slice(0, eq)] = line.slice(eq + 1);
+    }
+  } catch {
+    /* shell lookup failed */
+  }
+  return loginEnv;
+}
+
+// True when this machine is set up to run Claude Code against something other
+// than a claude.ai account: a provider/gateway/API-key var in this process's
+// env or the login shell, an `env` block or `apiKeyHelper` in the config dir's
+// settings files. Used to tell "no plan limits" from "never signed in".
+function thirdPartyProviderConfigured(configDir) {
+  const isSet = (v) => typeof v === "string" && v.trim() !== "" && v.trim() !== "0";
+  const envs = [process.env, loginShellEnv()];
+  if (envs.some((env) => THIRD_PARTY_KEYS.some((k) => isSet(env[k])))) return true;
+  const dir = configDir || join(homedir(), ".claude");
+  for (const name of ["settings.json", "settings.local.json"]) {
+    try {
+      const settings = JSON.parse(readFileSync(join(dir, name), "utf8"));
+      if (settings?.apiKeyHelper) return true;
+      const env = settings?.env;
+      if (env && THIRD_PARTY_KEYS.some((k) => isSet(String(env[k] ?? "")))) return true;
+    } catch {
+      /* no such file, or not JSON */
+    }
+  }
+  return false;
 }
 
 // A prompt iterable that never yields keeps the query handle open long enough
@@ -214,6 +267,14 @@ async function main() {
         "no_scope",
         subscription,
       );
+    }
+    // Otherwise there's no plan on record at all. That's what a session
+    // pointed at an API key, Bedrock, Vertex, or a gateway looks like — but
+    // it's also exactly what a machine that has simply never signed in looks
+    // like, and the SDK doesn't say which. Only blame a third-party setup
+    // when one is actually configured; otherwise the fix is to sign in.
+    if (!thirdPartyProviderConfigured(process.env.CLAUDE_CONFIG_DIR)) {
+      return fail("Not signed in to Claude Code", "not_signed_in", subscription);
     }
     return fail(
       "This session has no plan rate limits (API key, Bedrock, or Vertex)",
