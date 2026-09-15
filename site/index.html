@@ -98,7 +98,7 @@
           </span>
         </div>
 
-        <div class="panel" role="img" aria-label="Usage Meter dropdown panel. Claude, Max plan: 5-hour window 84 percent used, resets in 2 hours 12 minutes; weekly window 92 percent used, resets in 3 days 4 hours. Codex, Plus plan: 5-hour window 46 percent used, resets in 4 hours 41 minutes; weekly window 58 percent used, resets in 6 days 1 hour. Gemini: daily window 7 percent used, resets in 34 minutes. Settings and controls below.">
+        <div class="panel" role="img" aria-label="Usage Meter dropdown panel. Claude, Max plan: 5-hour window 84 percent used, resets in 2 hours 12 minutes; weekly window 92 percent used, resets in 3 days 4 hours. Codex, Plus plan: 5-hour window 46 percent used, resets in 4 hours 41 minutes; weekly window 58 percent used, resets in 6 days 1 hour; 3 free resets available, first expires September 21, with a Reset now button. Gemini: daily window 7 percent used, resets in 34 minutes. Settings and controls below.">
           <div class="card" style="--accent: var(--claude)">
             <div class="p-head">
               <img class="p-logo" src="claude-logo.png" alt="" width="14" height="14">
@@ -144,6 +144,16 @@
                 <span class="win-pct">58%<span class="win-mode">used</span></span>
               </div>
               <span class="track"><span class="fill accent" style="--pct:58%"></span></span>
+            </div>
+            <!-- Codex hands out free rate-limit resets; they sit under the bars
+                 they can clear, behind a divider, with the redeem beside them. -->
+            <div class="c-div"></div>
+            <div class="reset">
+              <span class="reset-text">
+                <span class="reset-count">3 free resets</span>
+                <span class="reset-expiry">First expires Sep 21</span>
+              </span>
+              <span class="btn-mini">Reset now</span>
             </div>
           </div>
 
@@ -224,7 +234,7 @@
         <details class="faq-item">
           <summary>Which tools does it track?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
-            <p>Claude Code, Codex, and Gemini (via Antigravity or the Gemini CLI). For each one it shows the rate-limit windows, 5-hour and weekly, as percent used with the time until they reset.</p>
+            <p>Claude Code, Codex, and Gemini (via Antigravity or the Gemini CLI). For each one it shows the rate-limit windows, 5-hour and weekly, as percent used with the time until they reset. When Codex grants you free rate-limit resets, it shows how many you have and lets you redeem one right from the dropdown.</p>
           </div>
         </details>
         <details class="faq-item">
