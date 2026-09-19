@@ -131,18 +131,21 @@ struct ProviderUsage: Identifiable, Equatable, Codable {
 
 enum Format {
     /// "resets in 3h 12m" / "resets in 2d 4h"
-    static func relativeReset(_ date: Date?) -> String {
+    static func relativeReset(_ date: Date?, now: Date = Date()) -> String {
         guard let date else { return "" }
-        let duration = resetDuration(date)
+        let duration = resetDuration(date, now: now)
         return duration == "resetting…" ? duration : "resets in \(duration)"
     }
 
     /// Just the time-remaining part: "12m" / "3h 12m" / "2d 4h" / "resetting…".
     /// Used inline next to a window's percentage where the "resets in" prefix
-    /// would cost too much width.
-    static func resetDuration(_ date: Date?) -> String {
+    /// would cost too much width. `now` is injectable so a ticking view can
+    /// recompute the countdown against the current wall clock — the reset moment
+    /// is fixed, but "how long until it" isn't, and nothing in the window's value
+    /// changes to prompt a redraw as time passes.
+    static func resetDuration(_ date: Date?, now: Date = Date()) -> String {
         guard let date else { return "" }
-        let secs = date.timeIntervalSinceNow
+        let secs = date.timeIntervalSince(now)
         if secs <= 0 { return "resetting…" }
         let mins = Int(secs / 60)
         if mins < 60 { return "\(mins)m" }

@@ -140,14 +140,26 @@ struct ProviderRow: View {
                                 Text(Format.resetCredits(credits))
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(.primary.opacity(0.85))
-                                if let expiry = Format.resetCreditExpiry(credits) {
-                                    Text(expiry)
+                                // Within a day this reads as a live "Expires in
+                                // 5h 2m", so it has to keep ticking: the credits
+                                // value doesn't change between refreshes, and a
+                                // plain Text would freeze at its first draw. Past a
+                                // day it's a fixed date and the ticking is a no-op.
+                                // Whether there's an expiry at all is time-
+                                // independent, so the outer guard stays stable.
+                                if Format.resetCreditExpiry(credits) != nil {
+                                    TimelineView(.everyMinute) { context in
+                                        Text(
+                                            Format.resetCreditExpiry(credits, now: context.date)
+                                                ?? ""
+                                        )
                                         .font(.system(size: 10))
                                         .foregroundStyle(.tertiary)
                                         .help(
                                             credits.earliestExpiry.map {
                                                 $0.formatted(date: .long, time: .shortened)
                                             } ?? "")
+                                    }
                                 }
                             }
                             .fixedSize(horizontal: false, vertical: true)

@@ -33,6 +33,21 @@ struct FormatTests {
         #expect(Format.relativeReset(Date(timeIntervalSinceNow: interval)) == "resets in 2d 3h")
     }
 
+    @Test("countdown is measured from the injected now, not the wall clock")
+    func resetDurationTracksInjectedNow() {
+        // The fixed reset moment reads differently as `now` advances — the
+        // property that lets a ticking view keep the countdown live instead of
+        // frozen at its first draw.
+        let reset = Date(timeIntervalSince1970: 1_789_830_220)  // 11:03:40
+        #expect(
+            Format.resetDuration(reset, now: reset.addingTimeInterval(-6 * 3600 - 18 * 60))
+                == "6h 18m")
+        #expect(
+            Format.resetDuration(reset, now: reset.addingTimeInterval(-2 * 3600 - 31 * 60))
+                == "2h 31m")
+        #expect(Format.resetDuration(reset, now: reset.addingTimeInterval(30)) == "resetting…")
+    }
+
     @Test("percent rounds to a whole number")
     func percentRounding() {
         #expect(Format.percent(4.0) == "4%")

@@ -32,10 +32,18 @@ struct WindowBar: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.primary.opacity(0.85))
                 if let reset = window.resetAt {
-                    Text(Format.resetDuration(reset))
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
+                    // The countdown has to redraw itself as the clock moves: the
+                    // window's value is unchanged between refreshes (same reset
+                    // moment, same percent), so a plain Text would be recomputed
+                    // only on a data change and freeze at whatever "now" it was
+                    // last drawn with. A minute-ticking TimelineView recomputes it
+                    // against the current wall clock regardless.
+                    TimelineView(.everyMinute) { context in
+                        Text(Format.resetDuration(reset, now: context.date))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .monospacedDigit()
+                    }
                 } else if let detail = window.detail {
                     Text(detail)
                         .font(.system(size: 10))
