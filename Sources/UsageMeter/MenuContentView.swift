@@ -72,15 +72,9 @@ struct MenuContentView: View {
     /// Limits first: it's what the app has always been, and the other two
     /// tabs are views onto history rather than live state.
     private var tabBar: some View {
-        Picker("View", selection: $tab) {
-            ForEach(UsageTab.allCases) { tab in
-                Text(tab.label).tag(tab)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
-        .frame(maxWidth: .infinity)
+        SegmentedPicker(
+            title: "View", selection: $tab,
+            options: UsageTab.allCases.map { ($0, $0.label) })
     }
 
     @ViewBuilder

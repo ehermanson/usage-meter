@@ -343,6 +343,7 @@ enum GeminiClient {
     /// as protection against `SecItemCopyMatching` blocking forever — it isn't
     /// cancellable, so the abandoned read is left to finish on its own.
     static func keychainRead(service: String, account: String) -> KeychainRead {
+        if keychainOff { return .absent }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -379,6 +380,16 @@ enum GeminiClient {
     /// authorization dialog waiting on the user, so the deadline doubles as the
     /// detector — generous by three orders of magnitude, still quick to give up.
     private static let keychainTimeout: TimeInterval = 2
+
+    /// `--no-keychain`, implied by `--snapshot`: Gemini acts as not set up and
+    /// never touches the Keychain. A dev build is ad-hoc signed, so each one is
+    /// a new app to the Keychain's access list — every rebuild or snapshot run
+    /// would otherwise put up another password prompt, which "Always Allow"
+    /// can't settle for the next binary.
+    private static let keychainOff: Bool = {
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("--no-keychain") || args.contains("--snapshot")
+    }()
 
     /// Set when any read in the current attempt gave up waiting on a dialog, so
     /// `accessToken()` can tell "no credentials here" from "can't get at them
@@ -442,7 +453,7 @@ enum GeminiClient {
     private static func storeOwnCredentials(
         _ creds: Credentials, accessToken: String, expiry: Date
     ) {
-        guard let refresh = creds.refreshToken,
+        guard !keychainOff, let refresh = creds.refreshToken,
             let data = try? JSONSerialization.data(withJSONObject: [
                 "refresh_token": refresh,
                 "client_id": creds.clientID,

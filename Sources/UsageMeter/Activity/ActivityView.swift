@@ -79,15 +79,9 @@ struct ActivityView: View {
     /// inside the card, a step below the tab bar: it scopes the numbers under
     /// it, not the panel.
     private var rangePicker: some View {
-        Picker("Range", selection: $activity.range) {
-            ForEach(ActivityRange.allCases) { range in
-                Text(range.label).tag(range)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.mini)
-        .frame(maxWidth: .infinity)
+        SegmentedPicker(
+            title: "Range", selection: $activity.range,
+            options: ActivityRange.allCases.map { ($0, $0.label) }, size: .mini)
     }
 
     // MARK: - Hero
