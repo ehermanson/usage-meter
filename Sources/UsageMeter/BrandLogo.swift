@@ -2,9 +2,10 @@ import AppKit
 
 /// Loads the bundled provider marks.
 ///
-/// Every source PNG is a single solid shape over transparency — Codex's `>_` is
-/// a knockout rather than white fill — so the marks tint cleanly to any color
-/// and ship as one asset instead of a light and a dark variant. The dropdown
+/// Every source PNG is a single solid shape over transparency — the hollows in
+/// the OpenAI mark's loops are knockouts rather than white fill — so the marks
+/// tint cleanly to any color and ship as one asset instead of a light and a
+/// dark variant. The dropdown
 /// lets AppKit apply the template tint; the menu bar draws into an image it
 /// composes itself and so needs `tinted(_:_:)` to do the same fill by hand.
 /// Main-actor isolated: these are AppKit images behind mutable static caches,

@@ -17,10 +17,6 @@ struct ProviderRow: View {
     /// The "are you sure?" step between the button and the redeem.
     @State private var confirmingReset = false
 
-    /// Source logos are pre-trimmed to their opaque bounds, so a single frame
-    /// renders both marks at the same visual size.
-    private let logoSize: CGFloat = 14
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
@@ -77,22 +73,7 @@ struct ProviderRow: View {
     /// text's cap-height center instead.
     private var header: some View {
         HStack(alignment: .rowMid, spacing: 6) {
-            if let logo = logoImage {
-                Image(nsImage: logo)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: logoSize, height: logoSize)
-                    .foregroundStyle(.primary)
-                    .alignmentGuide(.rowMid) { $0.height / 2 }
-                    .accessibilityHidden(true)
-            } else {
-                Circle()
-                    .fill(accent)
-                    .frame(width: 7, height: 7)
-                    .alignmentGuide(.rowMid) { $0.height / 2 }
-                    .accessibilityHidden(true)
-            }
+            ProviderMark(accent: accent, logoResource: logoResource)
             Text(provider.name)
                 .font(.system(size: 12, weight: .semibold))
             if let plan = provider.plan {
@@ -259,18 +240,75 @@ struct ProviderRow: View {
             .background(
                 tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
+}
 
-    /// The provider's bundled brand logo, loaded once as a tintable template
-    /// image. Shared with the menu-bar renderer via `BrandLogo`.
-    private var logoImage: NSImage? {
-        guard let logoResource else { return nil }
-        return BrandLogo.image(named: logoResource)
+/// A provider's marks at the head of a row: its brand logo as a template in
+/// the text color, and its accent dot. Meant for a `.rowMid` stack, and two
+/// views rather than one, so the stack spaces them like the rest of the row
+/// and centers each on the name's optical midline.
+///
+/// The Limits cards show the logo alone and fall back to the dot without
+/// one. The activity tabs' rows lead with the dot even beside a logo, as the
+/// key to the chart; see `Key`.
+struct ProviderMark: View {
+    /// What the dot says about a chart beside the row.
+    enum Key {
+        /// No chart: the logo alone, or the dot in its place without one.
+        case none
+        /// A solid dot, the key to the chart's line in that color.
+        case charted
+        /// A hollow dot, for a provider the chart leaves out. It keeps the
+        /// name lined up with the other rows' without pointing at a line
+        /// that isn't there.
+        case uncharted
+    }
+
+    let accent: Color
+    /// Bundled logo resource name; nil for a provider without one.
+    let logoResource: String?
+    var key = Key.none
+
+    /// Source logos are pre-trimmed to their opaque bounds, so a single frame
+    /// renders every mark at the same visual size.
+    private static let logoSize: CGFloat = 14
+
+    var body: some View {
+        // Loaded once and cached by `BrandLogo`, which the menu-bar renderer
+        // shares.
+        let logo = logoResource.flatMap(BrandLogo.image(named:))
+        if key != .none || logo == nil {
+            dot
+                .frame(width: 7, height: 7)
+                .alignmentGuide(.rowMid) { $0.height / 2 }
+                .accessibilityHidden(true)
+        }
+        if let logo {
+            Image(nsImage: logo)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: Self.logoSize, height: Self.logoSize)
+                .foregroundStyle(.primary)
+                .alignmentGuide(.rowMid) { $0.height / 2 }
+                .accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder
+    private var dot: some View {
+        if key == .uncharted {
+            Circle().strokeBorder(accent, lineWidth: 1.25)
+        } else {
+            Circle().fill(accent)
+        }
     }
 }
 
-private extension VerticalAlignment {
+extension VerticalAlignment {
     /// Aligns on a single line of text's optical (cap-height) center rather than
     /// its frame center, so a capsule-padded badge sits level with the name.
+    /// Every provider row header uses it, with `ProviderMark` centering its
+    /// marks on it.
     enum RowMid: AlignmentID {
         static func defaultValue(in d: ViewDimensions) -> CGFloat {
             d[.firstTextBaseline] * 0.66

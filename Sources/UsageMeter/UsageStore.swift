@@ -51,11 +51,52 @@ final class UsageStore {
     /// ~/.claude when file credentials live there). The escape hatch for setups
     /// the heuristic can't see — e.g. a config dir only ever named inside a
     /// shell alias. Changing it refetches immediately so the effect is visible.
+    ///
+    /// The Tokens and Cost tabs read their session logs from the same folder,
+    /// so they rescan too, rather than show the old folder's figures until
+    /// their next refresh. Alongside the refetch, not after it: the scan reads
+    /// the new pick from defaults, and a Claude fetch can take over a minute
+    /// to give up. (Back on Auto, it reads the folder the helper last
+    /// detected, which the refetch then confirms or updates for the next
+    /// scan.) Only for someone who uses those tabs; for anyone else there's
+    /// nothing on screen to correct, and their first scan reads the new
+    /// folder anyway.
     var claudeConfigDir: String? = UserDefaults.standard.string(forKey: "claudeConfigDir") {
         didSet {
             UserDefaults.standard.set(claudeConfigDir, forKey: "claudeConfigDir")
             Task { await refresh(force: true) }
+            if scansActivityAhead() {
+                Task { await ActivityStore.shared.refresh(force: true) }
+            }
         }
+    }
+
+    /// Whether the Tokens or Cost tab has ever been picked here. Until one
+    /// has, opening the panel leaves the session logs alone: a cold scan reads
+    /// every log on disk, gigabytes for a heavy user, and keeps its records in
+    /// memory after, all wasted on someone who only reads Limits. Set on the
+    /// first visit to either tab (see `noteTabSelected`) and never cleared.
+    var hasUsedActivityTabs = UserDefaults.standard.bool(forKey: UsageStore.activityTabsUsedKey) {
+        didSet { UserDefaults.standard.set(hasUsedActivityTabs, forKey: Self.activityTabsUsedKey) }
+    }
+
+    /// UserDefaults key for `hasUsedActivityTabs`.
+    static let activityTabsUsedKey = "hasUsedActivityTabs"
+
+    /// Records a tab the user picked, for `hasUsedActivityTabs`.
+    func noteTabSelected(_ tab: UsageTab) {
+        if tab != .limits, !hasUsedActivityTabs { hasUsedActivityTabs = true }
+    }
+
+    /// Whether opening the panel, or a Claude folder change, scans the
+    /// session logs without waiting for Tokens or Cost to be picked: once
+    /// either has been, or when `--tab` opens the panel on one. That tab is
+    /// showing from the start, so nothing picks it, and it would otherwise
+    /// wait on a scan that nothing starts. It isn't recorded as used, though:
+    /// that's for tabs a person picked, and a render run shouldn't turn on
+    /// background scans for every launch after it.
+    func scansActivityAhead(launchTab: UsageTab? = UsageTab.launchArgument) -> Bool {
+        hasUsedActivityTabs || (launchTab != nil && launchTab != .limits)
     }
 
     /// Short label for the config-dir picker: "Auto" or the folder with the

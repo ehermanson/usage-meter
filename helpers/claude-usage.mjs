@@ -4,15 +4,26 @@
 // Prints a single JSON line to stdout and exits.
 //
 //   { "ok": true,  "rate_limits": { "five_hour": { "utilization": 4, "resets_at": "..." }, ... },
-//                  "subscription_type": "..." }
-//   { "ok": false, "error": "Rate limited. Please try again later.", "code": "rate_limit_error" }
+//                  "subscription_type": "...", "config_dir": "/Users/me/.claude-work" }
+//   { "ok": false, "error": "Rate limited. Please try again later.", "code": "rate_limit_error",
+//                  "config_dir": null }
+//
+// `config_dir` is the CLAUDE_CONFIG_DIR usage was read with (null: unset, so
+// Claude Code's default). It's there once the dir is resolved, whatever the
+// outcome, and missing if the helper failed before that.
 
 // Generous enough for two warm CLI startups (the config-dir probe retries
 // once on an empty snapshot); each startup is individually capped at 30s.
 const OVERALL_TIMEOUT_MS = 65_000;
 
+// Set once resolved; see the header. The app keeps it so its session-log
+// scan reads the dir this found, including one exported only in ~/.profile
+// (see `resolveConfigDir`), which the app itself never inherits.
+let configDirUsed;
+
 function emit(obj) {
-  process.stdout.write(JSON.stringify(obj) + "\n");
+  const out = configDirUsed === undefined ? obj : { ...obj, config_dir: configDirUsed };
+  process.stdout.write(JSON.stringify(out) + "\n");
 }
 
 function fail(message, code, subscription) {
@@ -90,9 +101,11 @@ function resolveClaudeBin() {
 // rate_limits_available:false even though the user's own terminal works fine.
 //
 // Resolution: an explicit setting (the app's picker or a real env var) wins;
-// then a login-shell export; otherwise start unset like a bare spawn. `source`
-// tells the caller whether the choice was the user's ("user") or merely a
-// guess ("none") that a failed fetch is allowed to flip.
+// then an export a login `/bin/sh` sees (/etc/profile, ~/.profile — not zsh's
+// startup files, so a zsh user's ~/.zshrc export needs the picker); otherwise
+// start unset like a bare spawn. `source` tells the caller whether the choice
+// was the user's ("user") or merely a guess ("none") that a failed fetch is
+// allowed to flip.
 function resolveConfigDir() {
   if (process.env.CLAUDE_CONFIG_DIR) {
     return { dir: process.env.CLAUDE_CONFIG_DIR, source: "user" };
@@ -123,8 +136,9 @@ const THIRD_PARTY_KEYS = [
   "CLAUDE_CODE_USE_FOUNDRY",
 ];
 
-// The login shell's environment, for keys a GUI-spawned process never inherits
-// (an `export ANTHROPIC_API_KEY=…` in ~/.zshrc). Read once per run.
+// A login `/bin/sh`'s environment, for keys a GUI-spawned process never
+// inherits (an `export ANTHROPIC_API_KEY=…` in ~/.profile; like
+// `resolveConfigDir`, it doesn't see zsh's startup files). Read once per run.
 let loginEnv;
 function loginShellEnv() {
   if (loginEnv) return loginEnv;
@@ -215,6 +229,7 @@ async function main() {
   }
   const { dir: configDir, source } = resolveConfigDir();
   if (configDir) process.env.CLAUDE_CONFIG_DIR = configDir;
+  configDirUsed = configDir ?? null;
 
   let snap = await readUsageSnapshot(startup, pathToClaudeCodeExecutable);
 
@@ -230,7 +245,10 @@ async function main() {
       const retry = await readUsageSnapshot(startup, pathToClaudeCodeExecutable);
       // Keep whichever attempt carries data; on a double miss prefer the one
       // that at least knows the subscription (it yields a better message).
-      if (!isEmptySnapshot(retry) || retry?.subscription_type) snap = retry;
+      if (!isEmptySnapshot(retry) || retry?.subscription_type) {
+        snap = retry;
+        configDirUsed = dot;
+      }
     }
   }
 

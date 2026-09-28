@@ -37,6 +37,33 @@ if CommandLine.arguments.contains("--selftest") {
     exit(0)
 }
 
+// `UsageMeter --activity [24h|7d|30d|90d] [--now <ISO 8601>]` scans the local
+// session logs and prints the Tokens/Cost tabs' figures exactly (default 7d),
+// so the data path can be checked against an independent count without the
+// UI. `--now` pins the range's end, for runs that must agree while the logs
+// grow. Detached so the work never needs the main thread this blocks.
+if let i = CommandLine.arguments.firstIndex(of: "--activity") {
+    let range =
+        CommandLine.arguments[safe: i + 1].flatMap(ActivityRange.init(argument:)) ?? .week
+    var now: Date?
+    if let n = CommandLine.arguments.firstIndex(of: "--now") {
+        guard let text = CommandLine.arguments[safe: n + 1], let date = ActivityCLI.parseNow(text)
+        else {
+            FileHandle.standardError.write(
+                Data("--now needs an ISO 8601 time, e.g. 2026-09-27T23:00:00Z\n".utf8))
+            exit(2)
+        }
+        now = date
+    }
+    let sem = DispatchSemaphore(value: 0)
+    Task.detached { [now] in
+        await ActivityCLI.run(range: range, now: now)
+        sem.signal()
+    }
+    sem.wait()
+    exit(0)
+}
+
 // `UsageMeter --login on|off|status` manages the login item from the terminal.
 // Bundle.main resolves to the enclosing .app when run from inside its bundle.
 if let i = CommandLine.arguments.firstIndex(of: "--login") {

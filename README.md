@@ -16,7 +16,7 @@ A tiny macOS menu-bar app showing how much of your **Claude**, **Codex**, and
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/demo-light.png">
-    <img alt="Usage Meter menu-bar dropdown showing Claude, Codex, and Gemini usage" src="docs/demo-light.png" width="620">
+    <img alt="Usage Meter menu-bar dropdown on its Limits tab, showing Claude, Codex, and Gemini usage" src="docs/demo-light.png" width="620">
   </picture>
 </p>
 
@@ -31,6 +31,21 @@ just the ring, or a ring per provider for tracking all of them side by side.
 Options that wouldn't change anything on your setup are hidden — a ring per
 provider needs more than one. The dropdown always has the full numbers whichever
 style is set. Also there: **Show remaining**, and **Launch at Login**.
+
+Two more tabs look back rather than at the limits. **Tokens** and **Cost** add
+up what Claude Code and Codex processed over the last 24 hours or 7, 30, or 90
+days, charted with a line for each provider. The figures come from the session
+logs both tools already keep on your Mac, and the logs never leave it. Cost is
+an API-equivalent estimate at list prices (from LiteLLM's public price table),
+not a bill.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/demo-cost-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/demo-cost-light.png">
+    <img alt="Usage Meter's Cost tab: $1,257.90 over the last 7 days, charted daily with a line each for Claude and Codex, and the busiest day's figures in a tooltip" src="docs/demo-cost-light.png" width="620">
+  </picture>
+</p>
 
 ## Install
 
@@ -57,7 +72,8 @@ open build/UsageMeter.app
 
 Swift sources are formatted with `swift format` (config in
 [`.swift-format`](.swift-format)). `.build/release/UsageMeter --selftest` prints
-each provider's windows without the UI.
+each provider's windows without the UI, and `--activity [24h|7d|30d|90d]` prints
+the Tokens and Cost figures.
 
 ## Release
 

@@ -10,18 +10,23 @@ import SwiftUI
 /// open time, and gets it wrong whenever the geometry shifts afterward (an async
 /// data refresh adding rows, the "update available" row appearing, or a custom
 /// glass `contentView` swap). That produced the panel covering or misaligning
-/// against the menu bar. Here the panel's *top* is pinned just below the
-/// button's on-screen rect and the panel grows downward, so it can never overlap
-/// the menu bar regardless of height; horizontal position is clamped to the
-/// screen. Any later content resize re-runs the same placement.
+/// against the menu bar. Here `positionPanel` anchors the panel's *top* just
+/// below the button's on-screen rect, with the horizontal position clamped to
+/// the screen, and `DropdownPanel` holds every later frame change to that
+/// anchor. So the panel grows and shrinks downward, clear of the menu bar,
+/// for as long as it fits below it; only content taller than that (a small
+/// display, larger text) stops at the screen's bottom margin and extends
+/// upward instead. The anchor is re-derived on each open, when the content
+/// changes size, and when the displays change.
 @MainActor
 final class StatusBarController {
     private let store: UsageStore
     private let statusItem: NSStatusItem
-    private let panel: NSPanel
+    private let panel: DropdownPanel
     private let hostingView: ContentHostingView<MenuContentView>
 
     private var eventMonitor: Any?
+    private var screenObserver: NSObjectProtocol?
 
     /// Gap between the menu bar (button's bottom edge) and the panel's top.
     private let gap: CGFloat = 6
@@ -66,15 +71,20 @@ final class StatusBarController {
         configureButton()
         observeMenuBar()
         observeAppearance()
+        observeScreens()
 
         // Sweep the ring up from empty to whatever the store already has (the
         // last-good snapshot seeded from disk), so launch reads as the meter
         // filling rather than as a value appearing from nowhere.
         animateRing(to: store.menuBarDisplay)
 
-        // Re-place the panel whenever the SwiftUI content changes height (async
-        // refresh, the update row appearing) so the top stays anchored under the
-        // menu bar and it grows/shrinks downward rather than drifting.
+        // Re-fit the panel whenever the SwiftUI content changes size (a tab
+        // switch, an async refresh, the update row appearing). The top edge
+        // holds on its own (see `DropdownPanel`), and the hosting view
+        // usually resizes the window itself; this sizes it from
+        // `fittingSize` explicitly rather than counting on that through
+        // every material the content is wrapped in, and re-derives the
+        // anchor from where the button is now.
         hostingView.onContentSizeChange = { [weak self] in
             guard let self, self.panel.isVisible else { return }
             self.positionPanel()
@@ -98,7 +108,11 @@ final class StatusBarController {
 
         // `--snapshot <path>` renders the panel to a PNG (after giving the
         // usage fetch a moment) and quits — self-rendering, so it needs no
-        // screen-recording permission. Exits nonzero if the capture fails.
+        // screen-recording permission. Exits nonzero if the capture fails,
+        // or if the panel hasn't kept to its content's size (it would look
+        // wrong live too). With `--tab tokens|cost` it also waits out the
+        // session-log scan, which can outlast the five seconds on a cold
+        // start.
         if let i = args.firstIndex(of: "--snapshot"), args.indices.contains(i + 1) {
             let path = args[i + 1]
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
@@ -107,14 +121,37 @@ final class StatusBarController {
                 // and sizes the panel to fit, so the capture is never the stale
                 // 280×200 the panel was constructed with.
                 if !self.panel.isVisible { self.show() }
-                do {
-                    try self.snapshotPanel(to: path)
-                } catch {
-                    FileHandle.standardError.write(
-                        Data("snapshot failed (\(path)): \(error)\n".utf8))
-                    exit(EXIT_FAILURE)
+                Task { @MainActor in
+                    if let tab = UsageTab.launchArgument, tab != .limits {
+                        // Waits for the scan `show()` started, so the capture
+                        // has the figures rather than the loading row. If
+                        // it's already done, this is a quick warm rescan.
+                        await ActivityStore.shared.refresh()
+                    }
+                    // A beat for SwiftUI and AppKit to lay out what changed,
+                    // then a check that the panel is its content's size. The
+                    // panel isn't re-fitted here: the capture shows it as it
+                    // re-fits itself live, and one that doesn't hold its fit
+                    // fails the snapshot rather than being fixed up for it.
+                    try? await Task.sleep(for: .milliseconds(500))
+                    let wanted = self.hostingView.fittingSize.height
+                    if abs(self.panel.frame.height - wanted) > 1 {
+                        FileHandle.standardError.write(
+                            Data(
+                                ("snapshot failed (\(path)): the panel is"
+                                    + " \(self.panel.frame.height)pt tall, its content"
+                                    + " \(wanted)pt\n").utf8))
+                        exit(EXIT_FAILURE)
+                    }
+                    do {
+                        try self.snapshotPanel(to: path)
+                    } catch {
+                        FileHandle.standardError.write(
+                            Data("snapshot failed (\(path)): \(error)\n".utf8))
+                        exit(EXIT_FAILURE)
+                    }
+                    NSApplication.shared.terminate(nil)
                 }
-                NSApplication.shared.terminate(nil)
             }
         }
 
@@ -141,6 +178,7 @@ final class StatusBarController {
     /// the button owns it, and it only holds a weak reference back.
     deinit {
         ringTimer?.invalidate()
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
     }
 
     private enum SnapshotError: Error {
@@ -199,12 +237,25 @@ final class StatusBarController {
         try data.write(to: URL(fileURLWithPath: path))
     }
 
-    /// Renders the panel's content view into a PNG at `path`.
+    /// Renders the panel's content into a PNG at `path`.
+    ///
+    /// Not through the glass: `cacheDisplay` can't composite the material's
+    /// vibrancy, so inside it flat fills (the provider dots, template logos)
+    /// come out white and secondary text comes out black. The content is
+    /// moved onto a plain backdrop in the tone the glass reads as over a
+    /// neutral desktop, which keeps every color and measurement true. The app
+    /// quits right after, so the panel is never shown in this state.
     private func snapshotPanel(to path: String) throws {
-        guard let view = panel.contentView,
-            let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+        let backdrop = SnapshotBackdrop(frame: NSRect(origin: .zero, size: panel.frame.size))
+        hostingView.removeFromSuperview()
+        hostingView.frame = backdrop.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        backdrop.addSubview(hostingView)
+        panel.contentView = backdrop
+        backdrop.layoutSubtreeIfNeeded()
+        guard let rep = backdrop.bitmapImageRepForCachingDisplay(in: backdrop.bounds)
         else { throw SnapshotError.captureUnavailable }
-        view.cacheDisplay(in: view.bounds, to: rep)
+        backdrop.cacheDisplay(in: backdrop.bounds, to: rep)
         guard let data = rep.representation(using: .png, properties: [:]) else {
             throw SnapshotError.pngEncodingFailed
         }
@@ -328,6 +379,23 @@ final class StatusBarController {
         button.addSubview(probe)
     }
 
+    /// Re-place the open panel when the displays change under it: one
+    /// connected or removed, a new resolution or arrangement, the Dock moved.
+    /// The panel pins every resize to the anchor it was placed with, which
+    /// describes the old layout, so it would otherwise stay put while the
+    /// menu bar moved, or hang off a screen that's gone.
+    private func observeScreens() {
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.panel.isVisible else { return }
+                self.positionPanel()
+            }
+        }
+    }
+
     // MARK: - Ring animation
 
     /// Ease the ring to a new state. Only the ring moves — the text shows the
@@ -416,6 +484,15 @@ final class StatusBarController {
         if store.isStale {
             Task { await store.refresh() }
         }
+        // Whatever the tab, for someone who uses Tokens and Cost: a cold log
+        // scan takes a moment, and starting it on open means those tabs are
+        // usually ready by the time they're clicked. A warm rescan only reads
+        // what the logs gained since. Anyone else never pays for the cold
+        // scan until they first pick one of those tabs (see
+        // `UsageStore.scansActivityAhead` for `--tab`).
+        if store.scansActivityAhead(), ActivityStore.shared.isStale {
+            Task { await ActivityStore.shared.refresh() }
+        }
         Task { await UpdateChecker.shared.check() }
 
         // Lay the content out before measuring so the very first open is placed
@@ -492,12 +569,6 @@ final class StatusBarController {
         let screen = buttonWindow.screen ?? NSScreen.main
         let visible = screen?.visibleFrame ?? buttonFrame
 
-        // Anchor the panel's TOP just under the button and extend downward, so
-        // the panel never overlaps the menu bar no matter how tall it is.
-        var originY = buttonFrame.minY - gap - size.height
-        let minY = visible.minY + edgeMargin
-        if originY < minY { originY = minY }  // very tall content on a short screen
-
         // Center under the button, then clamp within the visible frame so the
         // panel can't spill off either screen edge.
         var originX = buttonFrame.midX - size.width / 2
@@ -505,14 +576,20 @@ final class StatusBarController {
         let maxX = visible.maxX - size.width - edgeMargin
         if maxX >= minX { originX = min(max(originX, minX), maxX) }
 
-        panel.setFrame(
-            NSRect(origin: NSPoint(x: originX, y: originY), size: size), display: true)
+        // Anchor the panel's TOP just under the button and extend downward, so
+        // the panel stays clear of the menu bar. Only one taller than the room
+        // below reaches past it: its bottom stops at the margin and it extends
+        // upward. The panel holds to the anchor itself (see `DropdownPanel`),
+        // so only the size given here matters.
+        panel.anchor = DropdownPanel.Anchor(
+            top: buttonFrame.minY - gap, x: originX, minY: visible.minY + edgeMargin)
+        panel.setFrame(NSRect(origin: .zero, size: size), display: true)
     }
 
     // MARK: - Panel construction
 
-    private static func makePanel(content: NSView) -> NSPanel {
-        let panel = KeyablePanel(
+    private static func makePanel(content: NSView) -> DropdownPanel {
+        let panel = DropdownPanel(
             contentRect: NSRect(x: 0, y: 0, width: 280, height: 200),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -571,6 +648,17 @@ final class StatusBarController {
     }
 }
 
+/// The stand-in for the glass in `--snapshot` captures: a rounded fill in
+/// roughly the tone the material shows over a neutral desktop, drawn in
+/// `draw(_:)` so it resolves against the pinned light or dark appearance.
+private final class SnapshotBackdrop: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        NSColor(white: isDark ? 0.10 : 0.98, alpha: 1).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 12, yRadius: 12).fill()
+    }
+}
+
 /// A zero-sized view whose only job is to report appearance changes. Parented to
 /// the status-item button, it inherits the button's appearance, so AppKit calls
 /// `viewDidChangeEffectiveAppearance` for every cause — theme switch, wallpaper
@@ -585,18 +673,67 @@ private final class AppearanceProbeView: NSView {
     }
 }
 
-/// A borderless window can't become key by default, which leaves every control
-/// inside rendering in its *inactive* appearance — switches stay gray whether
-/// on or off. Opting in restores active-state tinting; combined with
+/// The dropdown's window, which does two things a plain `NSPanel` won't.
+///
+/// It becomes key. A borderless window can't by default, which leaves every
+/// control inside rendering in its *inactive* appearance — switches stay gray
+/// whether on or off. Opting in restores active-state tinting; combined with
 /// `.nonactivatingPanel` the panel takes key status without activating the app,
 /// exactly like a native menu.
-private final class KeyablePanel: NSPanel {
+///
+/// And it keeps its place through resizes it didn't ask for. The hosting view
+/// resizes the window itself whenever the content's height changes — a tab
+/// switch, a refresh adding a row — in steps that each hold a different edge
+/// still: one re-applies the old height from the new origin, the next keeps
+/// the top of that. Re-placing the panel after the content changed lost that
+/// race, and the panel settled wherever the last step left it, up over the
+/// menu bar or dropped below it. Pinning the top edge here, where every frame
+/// change passes through, means any resize grows or shrinks the panel
+/// downward from under the menu bar, until it runs out of room below (see
+/// `Anchor.minY`).
+final class DropdownPanel: NSPanel {
+    struct Anchor {
+        /// Where the panel's top edge sits: just under the status item.
+        var top: CGFloat
+        var x: CGFloat
+        /// How low the bottom edge may go; content taller than the screen
+        /// allows grows upward from here instead.
+        var minY: CGFloat
+    }
+
+    /// Set by `StatusBarController.positionPanel` for the button's current
+    /// spot. Nil until the panel is first placed.
+    var anchor: Anchor?
+
     override var canBecomeKey: Bool { true }
+
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        super.setFrame(pinned(frameRect), display: flag)
+    }
+
+    /// AppKit routes this through `setFrame(_:display:)` too, at least for a
+    /// window that isn't on screen. Pinned here as well so an animated resize
+    /// doesn't depend on that.
+    override func setFrame(
+        _ frameRect: NSRect, display displayFlag: Bool, animate animateFlag: Bool
+    ) {
+        super.setFrame(pinned(frameRect), display: displayFlag, animate: animateFlag)
+    }
+
+    /// `frameRect`'s size at the anchor: the top edge on it, the bottom no
+    /// lower than its `minY`. Unchanged until there's an anchor.
+    private func pinned(_ frameRect: NSRect) -> NSRect {
+        guard let anchor else { return frameRect }
+        var pinned = frameRect
+        pinned.origin.x = anchor.x
+        pinned.origin.y = max(anchor.top - frameRect.height, anchor.minY)
+        return pinned
+    }
 }
 
-/// `NSHostingView` that reports when its SwiftUI content's ideal size changes,
-/// so the panel can be re-placed to keep its top edge anchored under the menu
-/// bar (a plain window would otherwise grow upward over the bar).
+/// `NSHostingView` that reports when its SwiftUI content's fitting size
+/// changes, so the controller can re-fit the panel to it. Holding the top
+/// edge in place through that resize is `DropdownPanel`'s job.
 final class ContentHostingView<Content: View>: NSHostingView<Content> {
     var onContentSizeChange: (() -> Void)?
     private var lastReportedSize: NSSize = .zero

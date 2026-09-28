@@ -7,6 +7,11 @@ import Foundation
 /// The SDK reuses Claude Code's own credentials (including silent token refresh),
 /// so there's no keychain parsing or token-expiry handling here.
 enum ClaudeClient {
+    /// UserDefaults key for the config dir the helper last found on its own
+    /// (see `rememberConfigDir`), which the Tokens and Cost tabs' log scan
+    /// reads too. Distinct from `claudeConfigDir`, the user's explicit pick.
+    static let detectedConfigDirKey = "claudeDetectedConfigDir"
+
     static func fetch() async -> ProviderUsage {
         // The Agent SDK needs a Claude Code binary to drive; the app reuses the
         // user's own install (passed to the helper via the env) rather than
@@ -33,6 +38,7 @@ enum ClaudeClient {
         if let dir = UserDefaults.standard.string(forKey: "claudeConfigDir"), !dir.isEmpty {
             env["CLAUDE_CONFIG_DIR"] = (dir as NSString).expandingTildeInPath
         }
+        let overridden = env["CLAUDE_CONFIG_DIR"] != nil
 
         let result: ProcessTools.Result
         do {
@@ -59,6 +65,10 @@ enum ClaudeClient {
                 "Claude", stderr.isEmpty ? "No output from SDK helper" : stderr,
                 retryable: true)
         }
+
+        // With an override, the helper's dir is just that override echoed
+        // back; the log scan reads the override itself.
+        if !overridden { rememberConfigDir(from: root) }
 
         let plan = prettyPlan(root["subscription_type"] as? String)
 
@@ -117,6 +127,21 @@ enum ClaudeClient {
             return .failed("Claude", "No rate-limit data", retryable: true, plan: plan)
         }
         return parse(limits, plan: plan)
+    }
+
+    /// Keeps the helper's `config_dir` — the dir it read usage with, or
+    /// null for Claude Code's default — so the log scan reads the same one.
+    /// Worth keeping because the helper also finds a `CLAUDE_CONFIG_DIR`
+    /// exported only in ~/.profile (see its `resolveConfigDir`), which this
+    /// app never inherits. No key at all (a helper from before it, or one
+    /// that failed before resolving the dir) leaves the last answer standing.
+    static func rememberConfigDir(from root: [String: Any], defaults: UserDefaults = .standard) {
+        guard let value = root["config_dir"] else { return }
+        if let dir = value as? String, !dir.isEmpty {
+            defaults.set((dir as NSString).expandingTildeInPath, forKey: detectedConfigDirKey)
+        } else {
+            defaults.removeObject(forKey: detectedConfigDirKey)
+        }
     }
 
     // MARK: - Parsing (rate_limits shares the /api/oauth/usage shape)

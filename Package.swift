@@ -14,7 +14,7 @@ let package = Package(
             // shipped app's resource weight for no reader.
             resources: [
                 .copy("Resources/claude-logo.png"),
-                .copy("Resources/codex-logo.png"),
+                .copy("Resources/openai-logo.png"),
                 .copy("Resources/gemini-logo.png")
             ]
         ),

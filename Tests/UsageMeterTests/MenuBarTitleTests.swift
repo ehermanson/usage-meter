@@ -185,7 +185,7 @@ struct MenuBarTitleTests {
             #expect(display.glyphs.map(\.id) == ["Claude", "Codex"])
             #expect(display.glyphs[0].severity == 0.42)
             #expect(display.glyphs[1].severity == 0.8)
-            #expect(display.glyphs[1].logoResource == "codex-logo")
+            #expect(display.glyphs[1].logoResource == "openai-logo")
             #expect(store.menuBarTooltip == "Claude — 5h 42% · Wk 31% used\nCodex — 5h 80% used")
         }
     }

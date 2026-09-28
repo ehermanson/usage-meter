@@ -123,4 +123,32 @@ struct ClaudeParseTests {
         #expect(!usage.hasWindows)
         #expect(usage.error != nil)
     }
+
+    @Test("the helper's config dir is kept for the log scan; null clears it, absent keeps it")
+    func remembersConfigDir() throws {
+        let suite = "ClaudeParseTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let key = ClaudeClient.detectedConfigDirKey
+        #expect(key != "claudeConfigDir")  // never the user's own pick
+
+        ClaudeClient.rememberConfigDir(
+            from: ["ok": true, "config_dir": "/Users/me/.claude-work"], defaults: defaults)
+        #expect(defaults.string(forKey: key) == "/Users/me/.claude-work")
+
+        // An older helper, or one that failed before resolving: unchanged.
+        ClaudeClient.rememberConfigDir(from: ["ok": false, "code": "timeout"], defaults: defaults)
+        #expect(defaults.string(forKey: key) == "/Users/me/.claude-work")
+
+        // A leading tilde is expanded, as the log scan would.
+        ClaudeClient.rememberConfigDir(from: ["config_dir": "~/.claude-alt"], defaults: defaults)
+        #expect(defaults.string(forKey: key) == NSHomeDirectory() + "/.claude-alt")
+
+        // Resolved to nothing (Claude Code's default): forgotten.
+        let json = #"{"ok":false,"code":"not_signed_in","config_dir":null}"#
+        let root = try #require(
+            try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        ClaudeClient.rememberConfigDir(from: root, defaults: defaults)
+        #expect(defaults.string(forKey: key) == nil)
+    }
 }

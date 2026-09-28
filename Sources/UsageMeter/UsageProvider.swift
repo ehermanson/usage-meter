@@ -72,11 +72,15 @@ struct ClaudeProvider: UsageProvider {
 }
 
 /// Codex — driven by a short-lived `codex app-server` JSON-RPC subprocess.
-/// Cheap and local, so it refreshes on every pass.
+/// Cheap and local, so it refreshes on every pass. Codex now wears OpenAI's
+/// own mark and monochrome brand: black, or white on a dark surface.
 struct CodexProvider: UsageProvider {
     let name = "Codex"
-    let accent = Color.teal
-    let logoResource: String? = "codex-logo"
+    let accent = Color(
+        nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .white : .black
+        })
+    let logoResource: String? = "openai-logo"
     func fetch() async -> ProviderUsage { await CodexClient.fetch() }
 }
 

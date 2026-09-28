@@ -20,16 +20,25 @@
   /* One spring-like easing used for all motion. */
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* Per-provider brand accents — mirror the app (Claude orange, Codex teal,
-     Gemini blue). These live only inside the mockup, never as page chrome. */
+  /* Per-provider brand accents — mirror the app (Claude orange, Codex in
+     OpenAI's monochrome, Gemini blue). These live only inside the mockup, never
+     as page chrome. */
   --claude: #ff9f0a;
-  --codex: #30b0c7;
+  --codex: #ffffff;
   --gemini: #0a84ff;
+  /* Claude's marks in the Tokens and Cost views (lines, areas, dots, tinted
+     logos): the app's Color.orange, which stays bright in light mode, where
+     --claude darkens for the aurora. */
+  --claude-mark: #ff9f0a;
 
   /* Card surfaces inside the panel, matching the app's translucent overlays. */
   --panel-card: rgba(255, 255, 255, 0.05);
   --panel-stroke: rgba(255, 255, 255, 0.08);
   --panel-track: rgba(255, 255, 255, 0.09);
+  /* The segmented controls' raised segment, and the chart tooltip's card. */
+  --seg-on: rgba(255, 255, 255, 0.17);
+  --seg-on-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --tip-bg: #24272d;
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", monospace;
@@ -51,8 +60,9 @@
     --danger: #d70015;
 
     --claude: #d17a00;
-    --codex: #128aa0;
+    --codex: #000000;
     --gemini: #007aff;
+    --claude-mark: #ff9500;
 
     --hair: rgba(0, 0, 0, 0.07);
     --hair-strong: rgba(0, 0, 0, 0.1);
@@ -64,6 +74,9 @@
     --panel-card: rgba(0, 0, 0, 0.035);
     --panel-stroke: rgba(0, 0, 0, 0.08);
     --panel-track: rgba(0, 0, 0, 0.08);
+    --seg-on: #ffffff;
+    --seg-on-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.12);
+    --tip-bg: #ffffff;
   }
 }
 
@@ -229,6 +242,7 @@ h1 {
   font-size: 1.2rem;
   max-width: 46ch;
   margin: 22px auto 34px;
+  text-wrap: pretty;
 }
 
 /* Primary CTA: a fully-rounded island pill with the download glyph nested in
@@ -525,6 +539,117 @@ h1 { animation-delay: 0.06s; }
   .panel { box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12); }
 }
 
+/* The app's tab bar (Limits | Tokens | Cost): a small macOS segmented control
+   across the top of the panel. The raised segment is one pill that slides to
+   whichever tab `data-tab` names; labels sit above it. */
+.tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 2px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 4%, transparent);
+}
+.tabs::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / 3);
+  border-radius: 4.5px;
+  background: var(--seg-on);
+  box-shadow: var(--seg-on-shadow);
+  transition: transform 0.45s var(--ease);
+}
+.panel[data-tab="tokens"] .tabs::before { transform: translateX(100%); }
+.panel[data-tab="cost"] .tabs::before { transform: translateX(200%); }
+.tab {
+  position: relative;
+  z-index: 1;
+  height: 15px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4.5px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.3s var(--ease);
+}
+/* Controls only once the script is there to drive them. */
+.js .tab { cursor: pointer; }
+.js .tab[aria-selected="false"]:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+/* The site's focus ring, pulled in to fit inside the control. */
+.tab:focus-visible { outline-offset: 0; border-radius: 4.5px; }
+/* Hairlines between unselected neighbors, like the system control. */
+.tab + .tab::before {
+  content: "";
+  position: absolute;
+  left: -0.5px;
+  top: 3px;
+  bottom: 3px;
+  width: 1px;
+  background: color-mix(in srgb, var(--text) 15%, transparent);
+  transition: opacity 0.3s var(--ease);
+}
+.panel[data-tab="limits"] .tab[data-for="tokens"]::before,
+.panel[data-tab="tokens"] .tab::before,
+.panel[data-tab="cost"] .tab[data-for="cost"]::before { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .tabs::before, .tab, .tab + .tab::before { transition: none; }
+}
+
+/* One view per tab, stacked in one box: the selected view is in flow and sets
+   the height; the others stay laid out (so the script can measure them) but
+   out of flow, invisible, and out of the accessibility tree. */
+.views {
+  position: relative;
+  overflow: clip;
+}
+.view {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  visibility: hidden;
+  pointer-events: none;
+  border-radius: 10px;
+}
+.panel[data-tab="limits"] [data-view="limits"],
+.panel[data-tab="tokens"] [data-view="tokens"],
+.panel[data-tab="cost"] [data-view="cost"] {
+  position: relative;
+  visibility: visible;
+  pointer-events: auto;
+}
+/* The selected view takes focus after the tabs (the ARIA tabs pattern); its
+   ring sits inside, since `.views` clips anything past its edges. */
+.view:focus-visible { outline-offset: -2px; }
+.view-body,
+.panel-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* On a switch the panel eases to the new view's height from the top, as the
+   real one does under the menu bar, and the new view fades in. */
+.views.is-resizing { transition: height 0.42s var(--ease); }
+.view.is-entering { animation: viewIn 0.32s var(--ease) both; }
+@keyframes viewIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .views.is-resizing { transition: none; }
+  .view.is-entering { animation: none; }
+}
+
 /* Each provider in its own soft card — grouping from the surface, not dividers. */
 .card {
   background: var(--panel-card);
@@ -744,6 +869,174 @@ h1 { animation-delay: 0.06s; }
    verifiable at a glance. */
 .pf-end { display: inline-flex; align-items: center; gap: 10px; }
 .pf-version { opacity: 0.65; }
+
+/* Tokens and Cost. The hero card leads with the range picker, then the
+   range's total, then the daily chart. */
+.a-hero { gap: 12px; }
+/* The range picker: the tab bar's control a size down (mini), with 7d on. */
+.seg-mini {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 1.5px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 4%, transparent);
+}
+.seg-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+  border-radius: 3.5px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+}
+.seg-item.is-on { background: var(--seg-on); box-shadow: var(--seg-on-shadow); }
+.seg-item + .seg-item::before {
+  content: "";
+  position: absolute;
+  left: -0.5px;
+  top: 3.5px;
+  bottom: 3.5px;
+  width: 1px;
+  background: color-mix(in srgb, var(--text) 15%, transparent);
+}
+.seg-item.is-on::before,
+.seg-item.is-on + .seg-item::before { display: none; }
+
+.a-head { display: flex; flex-direction: column; gap: 2px; }
+.a-total {
+  font-size: 23px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.a-caption { font-size: 10px; color: var(--text-2); }
+.a-plot { display: flex; flex-direction: column; gap: 7px; }
+.a-title { font-size: 9.5px; font-weight: 600; color: var(--text-2); }
+
+/* The chart: static SVG in CSS pixels at the panel's width (it scales down
+   with a narrower panel). One area and line per provider, overlapping rather
+   than stacked, on three faint gridlines. */
+.chart {
+  position: relative;
+  /* Let a vertical swipe scroll the page; a sideways one scrubs the days. */
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  --chart-ring: color-mix(in srgb, var(--surface), var(--text) 4%);
+  --tip-w: 118px;
+}
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* The last day's dot and line cap sit on the plot's edge. */
+  overflow: visible;
+}
+.chart .grid { stroke: var(--text); stroke-opacity: 0.1; stroke-width: 0.5; }
+/* Axis text is tertiary, half the captions' ink, as the app draws it, so the
+   curves lead. */
+.chart .axis {
+  fill: var(--text-2);
+  fill-opacity: 0.55;
+  font-size: 8.5px;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.chart .area { fill-opacity: 0.14; }
+.chart .line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chart .area.claude, .chart .hover-dot.claude { fill: var(--claude-mark); }
+.chart .area.codex, .chart .hover-dot.codex { fill: var(--codex); }
+.chart .line.claude { stroke: var(--claude-mark); }
+.chart .line.codex { stroke: var(--codex); }
+
+/* Hover: a rule at the day, a dot on each line, and a card beside it. The
+   markup is parked on the busiest day; it shows while the pointer is over the
+   chart (the script moves it) or when the panel has `data-demo-hover` (the
+   README render, which runs no script). */
+.chart .hover,
+.tip { visibility: hidden; }
+/* `inherit`, not `visible`, so the hidden views' charts stay hidden. */
+.chart.is-hover .hover,
+.chart.is-hover .tip,
+.panel[data-demo-hover] .hover,
+.panel[data-demo-hover] .tip { visibility: inherit; }
+.hover-rule { stroke: var(--text); stroke-opacity: 0.3; stroke-width: 1; }
+.hover-dot { stroke: var(--chart-ring); stroke-width: 1.25; }
+
+.tip {
+  position: absolute;
+  top: 3px;
+  /* Right of the rule by default; `.is-flip` puts it on the left. */
+  left: calc(var(--x, 0%) + 8px);
+  width: var(--tip-w);
+  padding: 6px 8px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 7px;
+  background: var(--tip-bg);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent),
+    0 4px 12px rgba(0, 0, 0, 0.18);
+  font-size: 10px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+.tip.is-flip { left: calc(var(--x, 0%) - 8px - var(--tip-w)); }
+.tip-day { font-size: 9px; font-weight: 500; color: var(--text-2); }
+.tip-row { display: flex; align-items: center; gap: 4px; }
+.tip-logo { display: block; width: 9px; height: 9px; flex: none; object-fit: contain; }
+.tip-logo.claude { filter: url(#tint-claude); }
+.tip-logo.codex { filter: url(#tint-codex); }
+.tip-val {
+  margin-left: auto;
+  padding-left: 8px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.tip-div {
+  height: 1px;
+  background: color-mix(in srgb, var(--text-2) 40%, transparent);
+  opacity: 0.5;
+}
+.tints { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* The split by provider: dot (the chart's key), logo, name and sessions, the
+   tab's figure on the right; under it, the share and the other figure. */
+.a-split { gap: 10px; }
+.a-row { display: flex; flex-direction: column; gap: 3px; }
+.a-row-top { display: flex; align-items: center; gap: 5px; }
+.a-row-top .p-logo { margin-right: 1px; }
+.a-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; }
+.a-dot.claude { background: var(--claude-mark); }
+.a-dot.codex { background: var(--codex); }
+.a-name { font-size: 12px; font-weight: 600; }
+.a-sessions {
+  font-size: 9.5px;
+  color: var(--text-2);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.a-value {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.a-detail {
+  font-size: 10px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
 
 /* FAQ — a single machined panel with hairline-divided disclosure rows. Reads
    like documentation, not marketing. */

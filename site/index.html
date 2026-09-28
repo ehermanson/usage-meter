@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Usage Meter: Know when you're about to hit your limit</title>
-  <meta name="description" content="A macOS menu-bar app that surfaces the rate-limit usage your coding tools keep buried, including Claude Code, Codex, and Gemini: percent used and time to reset, at a glance. Free and open source.">
+  <meta name="description" content="A macOS menu-bar app that surfaces the rate-limit usage your coding tools keep buried, including Claude Code, Codex, and Gemini: percent used and time to reset, at a glance. It also adds up Claude Code and Codex tokens, with an estimated cost at API prices. Free and open source.">
 
   <meta property="og:type" content="website">
   <meta property="og:title" content="Usage Meter: Know when you're about to hit your limit">
-  <meta property="og:description" content="Your coding tools bury their rate-limit usage behind a menu or a command. Usage Meter keeps it in your menu bar: percent used and time to reset, at a glance.">
+  <meta property="og:description" content="Your coding tools bury their rate-limit usage behind a menu or a command. Usage Meter keeps it in your menu bar: percent used and time to reset, at a glance, plus the tokens and estimated cost behind it.">
   <meta property="og:image" content="usage-meter-app-icon.png">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Usage Meter: Know when you're about to hit your limit">
-  <meta name="twitter:description" content="Your coding tools bury their rate-limit usage behind a menu or a command. Usage Meter keeps it in your menu bar: percent used and time to reset, at a glance.">
+  <meta name="twitter:description" content="Your coding tools bury their rate-limit usage behind a menu or a command. Usage Meter keeps it in your menu bar: percent used and time to reset, at a glance, plus the tokens and estimated cost behind it.">
   <meta name="twitter:image" content="usage-meter-app-icon.png">
 
   <link rel="icon" type="image/png" href="usage-meter-app-icon.png">
@@ -39,7 +39,7 @@
   <main id="top">
     <section class="hero">
       <h1>Know when you're about to hit your limit.</h1>
-      <p class="subline">Your coding tools bury their rate-limit usage behind a menu or a command. Usage Meter keeps it in your menu bar: percent used and time to reset, at a glance.</p>
+      <p class="subline">Your coding tools bury their rate-limit usage behind a menu or a command. Usage Meter keeps it in your menu bar: percent used and time to reset, at a glance, plus the tokens and estimated cost behind it.</p>
 
       <a class="btn" href="https://github.com/ehermanson/usage-meter/releases/latest">
         <span class="btn-label">Download for macOS</span>
@@ -54,6 +54,21 @@
       <p class="badge-line">Free · Open source · macOS 14+</p>
 
       <div class="mockup-wrap">
+        <!-- Tints for the chart tooltips' logos, which take their line's color
+             like the app's template images. A filter rather than a CSS mask:
+             Chrome won't load mask images on file:// pages, and the README
+             render is one. -->
+        <svg class="tints" width="0" height="0" aria-hidden="true" focusable="false">
+          <filter id="tint-claude" color-interpolation-filters="sRGB">
+            <feFlood style="flood-color: var(--claude-mark)"></feFlood>
+            <feComposite in2="SourceAlpha" operator="in"></feComposite>
+          </filter>
+          <filter id="tint-codex" color-interpolation-filters="sRGB">
+            <feFlood style="flood-color: var(--codex)"></feFlood>
+            <feComposite in2="SourceAlpha" operator="in"></feComposite>
+          </filter>
+        </svg>
+
         <!-- A slice of the macOS menu bar, with the Usage Meter item open. -->
         <div class="menubar" aria-hidden="true">
           <!-- Our menu extra, highlighted because its dropdown is open. The item
@@ -98,125 +113,303 @@
           </span>
         </div>
 
-        <div class="panel" role="img" aria-label="Usage Meter dropdown panel. Claude, Max plan: 5-hour window 84 percent used, resets in 2 hours 12 minutes; weekly window 92 percent used, resets in 3 days 4 hours. Codex, Plus plan: 5-hour window 46 percent used, resets in 4 hours 41 minutes; weekly window 58 percent used, resets in 6 days 1 hour; 3 free resets available, first expires September 21, with a Reset now button. Gemini: daily window 7 percent used, resets in 34 minutes. Settings and controls below.">
-          <div class="card" style="--accent: var(--claude)">
-            <div class="p-head">
-              <img class="p-logo" src="claude-logo.png" alt="" width="14" height="14">
-              <span class="p-name">Claude</span>
-              <span class="p-badge">Max</span>
-            </div>
-            <div class="win">
-              <div class="win-top">
-                <span class="win-label">5h</span>
-                <span class="win-reset">2h 12m</span>
-                <span class="win-pct">84%<span class="win-mode">used</span></span>
+        <!-- The dropdown, opened on the app's Limits tab. `data-tab` picks the
+             view (CSS shows the match; the script below only flips it). Each
+             view and the shared settings describe themselves as one image to
+             assistive tech, while the tabs stay real controls. Tokens and Cost
+             start disabled; the script enables them, so a page without it
+             doesn't offer tabs that do nothing. -->
+        <div class="panel" data-tab="limits" role="group" aria-label="Preview of the Usage Meter dropdown">
+          <div class="tabs" role="tablist" aria-label="Usage Meter views">
+            <button class="tab" type="button" role="tab" id="tab-limits" data-for="limits" aria-controls="view-limits" aria-selected="true">Limits</button>
+            <button class="tab" type="button" role="tab" id="tab-tokens" data-for="tokens" aria-controls="view-tokens" aria-selected="false" aria-disabled="true" tabindex="-1">Tokens</button>
+            <button class="tab" type="button" role="tab" id="tab-cost" data-for="cost" aria-controls="view-cost" aria-selected="false" aria-disabled="true" tabindex="-1">Cost</button>
+          </div>
+
+          <div class="views">
+            <!-- Limits: each provider's live windows in its own card. -->
+            <div class="view" id="view-limits" role="tabpanel" aria-labelledby="tab-limits" tabindex="0" data-view="limits">
+              <div class="view-body" role="img" aria-label="Limits tab. Claude, Max plan: 5-hour window 84 percent used, resets in 2 hours 12 minutes; weekly window 92 percent used, resets in 3 days 4 hours. Codex, Plus plan: 5-hour window 46 percent used, resets in 4 hours 41 minutes; weekly window 58 percent used, resets in 6 days 1 hour; 3 free resets available, first expires September 21, with a Reset now button. Gemini: daily window 7 percent used, resets in 34 minutes.">
+                <div class="card" style="--accent: var(--claude)">
+                  <div class="p-head">
+                    <img class="p-logo" src="claude-logo.png" alt="" width="14" height="14">
+                    <span class="p-name">Claude</span>
+                    <span class="p-badge">Max</span>
+                  </div>
+                  <div class="win">
+                    <div class="win-top">
+                      <span class="win-label">5h</span>
+                      <span class="win-reset">2h 12m</span>
+                      <span class="win-pct">84%<span class="win-mode">used</span></span>
+                    </div>
+                    <span class="track"><span class="fill yellow" style="--pct:84%"></span></span>
+                  </div>
+                  <div class="win">
+                    <div class="win-top">
+                      <span class="win-label">Weekly</span>
+                      <span class="win-reset">3d 4h</span>
+                      <span class="win-pct">92%<span class="win-mode">used</span></span>
+                    </div>
+                    <span class="track"><span class="fill red" style="--pct:92%"></span></span>
+                  </div>
+                </div>
+
+                <div class="card" style="--accent: var(--codex)">
+                  <div class="p-head">
+                    <img class="p-logo" src="openai-logo.png" alt="" width="14" height="14">
+                    <span class="p-name">Codex</span>
+                    <span class="p-badge">Plus</span>
+                  </div>
+                  <div class="win">
+                    <div class="win-top">
+                      <span class="win-label">5h</span>
+                      <span class="win-reset">4h 41m</span>
+                      <span class="win-pct">46%<span class="win-mode">used</span></span>
+                    </div>
+                    <span class="track"><span class="fill accent" style="--pct:46%"></span></span>
+                  </div>
+                  <div class="win">
+                    <div class="win-top">
+                      <span class="win-label">Weekly</span>
+                      <span class="win-reset">6d 1h</span>
+                      <span class="win-pct">58%<span class="win-mode">used</span></span>
+                    </div>
+                    <span class="track"><span class="fill accent" style="--pct:58%"></span></span>
+                  </div>
+                  <!-- Codex hands out free rate-limit resets; they sit under the bars
+                       they can clear, behind a divider, with the redeem beside them. -->
+                  <div class="c-div"></div>
+                  <div class="reset">
+                    <span class="reset-text">
+                      <span class="reset-count">3 free resets</span>
+                      <span class="reset-expiry">First expires Sep 21</span>
+                    </span>
+                    <span class="btn-mini">Reset now</span>
+                  </div>
+                </div>
+
+                <div class="card" style="--accent: var(--gemini)">
+                  <div class="p-head">
+                    <img class="p-logo" src="gemini-logo.png" alt="" width="14" height="14">
+                    <span class="p-name">Gemini</span>
+                  </div>
+                  <div class="win">
+                    <div class="win-top">
+                      <span class="win-label">Daily</span>
+                      <span class="win-reset">34m</span>
+                      <span class="win-pct">7%<span class="win-mode">used</span></span>
+                    </div>
+                    <span class="track"><span class="fill accent" style="--pct:7%"></span></span>
+                  </div>
+                </div>
               </div>
-              <span class="track"><span class="fill yellow" style="--pct:84%"></span></span>
             </div>
-            <div class="win">
-              <div class="win-top">
-                <span class="win-label">Weekly</span>
-                <span class="win-reset">3d 4h</span>
-                <span class="win-pct">92%<span class="win-mode">used</span></span>
+
+            <!-- Tokens: the range's total, a line per provider, and the split. -->
+            <div class="view" id="view-tokens" role="tabpanel" aria-labelledby="tab-tokens" tabindex="0" data-view="tokens">
+              <div class="view-body" role="img" aria-label="Tokens tab, last 7 days: 2.77 billion tokens across 124 sessions. Daily tokens chart, September 10 to 16, busiest on Tuesday, September 15 with 988 million. Claude: 2.62 billion tokens, 94.7% of the total, 107 sessions, $1,101.11 at API prices. Codex: 145 million tokens, 5.3% of the total, 17 sessions, $156.79 at API prices.">
+                <div class="card a-hero">
+                  <!-- The range picker, mini and inside the card: it scopes the numbers
+                       under it, not the panel. Only 7d has data here. -->
+                  <div class="seg-mini">
+                    <span class="seg-item">24h</span>
+                    <span class="seg-item is-on">7d</span>
+                    <span class="seg-item">30d</span>
+                    <span class="seg-item">90d</span>
+                  </div>
+                  <div class="a-head">
+                    <span class="a-total">2.77B</span>
+                    <span class="a-caption">124 sessions</span>
+                  </div>
+                  <div class="a-plot">
+                    <span class="a-title">Daily tokens</span>
+                    <!-- Static SVG, so the view renders without the script: monotone
+                         curves through each day, precomputed, like the app's chart.
+                         `data-chart` holds each day's position and figures for the hover. -->
+                    <div class="chart" data-chart='{"w":236,"x":[27.0,61.67,96.33,131.0,165.67,200.33,235.0],"days":["Thu, Sep 10","Fri, Sep 11","Sat, Sep 12","Sun, Sep 13","Mon, Sep 14","Tue, Sep 15","Wed, Sep 16"],"y":[[63.3,66.81,78.18,69.09,33.62,10.62,71.66],[84.69,85.07,86.5,86.03,84.32,82.35,84.75]],"v":[["286M","243M","103M","215M","653M","937M","183M"],["22.3M","17.6M","0","5.80M","26.9M","51.2M","21.6M"]],"total":["309M","261M","103M","221M","680M","988M","205M"]}'>
+                      <svg class="chart-svg" viewBox="0 0 236 104" width="236" height="104" aria-hidden="true" focusable="false">
+                        <line class="grid" x1="27" x2="236" y1="5.5" y2="5.5"></line>
+                        <text class="axis" x="22" y="5.5" dy="0.34em" text-anchor="end">1B</text>
+                        <line class="grid" x1="27" x2="236" y1="46" y2="46"></line>
+                        <text class="axis" x="22" y="46" dy="0.34em" text-anchor="end">500M</text>
+                        <line class="grid" x1="27" x2="236" y1="86.5" y2="86.5"></line>
+                        <text class="axis" x="22" y="86.5" dy="0.34em" text-anchor="end">0</text>
+                        <text class="axis" x="27" y="100.5" text-anchor="start">SEP 10</text>
+                        <text class="axis" x="131" y="100.5" text-anchor="middle">SEP 13</text>
+                        <text class="axis" x="235" y="100.5" text-anchor="end">SEP 16</text>
+                        <path class="area claude" d="M27 63.3C38.56 63.89 50.11 64.47 61.67 66.81C73.22 69.15 84.78 78.18 96.33 78.18C107.89 78.18 119.44 75.15 131 69.09C142.56 63.03 154.11 43.36 165.67 33.62C177.22 23.87 188.78 10.62 200.33 10.62C211.89 10.62 223.44 41.14 235 71.66L235 86.5L27 86.5Z"></path>
+                        <path class="area codex" d="M27 84.69C38.56 84.76 50.11 84.82 61.67 85.07C73.22 85.33 84.78 86.5 96.33 86.5C107.89 86.5 119.44 86.34 131 86.03C142.56 85.72 154.11 84.93 165.67 84.32C177.22 83.71 188.78 82.35 200.33 82.35C211.89 82.35 223.44 83.55 235 84.75L235 86.5L27 86.5Z"></path>
+                        <path class="line claude" d="M27 63.3C38.56 63.89 50.11 64.47 61.67 66.81C73.22 69.15 84.78 78.18 96.33 78.18C107.89 78.18 119.44 75.15 131 69.09C142.56 63.03 154.11 43.36 165.67 33.62C177.22 23.87 188.78 10.62 200.33 10.62C211.89 10.62 223.44 41.14 235 71.66"></path>
+                        <path class="line codex" d="M27 84.69C38.56 84.76 50.11 84.82 61.67 85.07C73.22 85.33 84.78 86.5 96.33 86.5C107.89 86.5 119.44 86.34 131 86.03C142.56 85.72 154.11 84.93 165.67 84.32C177.22 83.71 188.78 82.35 200.33 82.35C211.89 82.35 223.44 83.55 235 84.75"></path>
+                        <g class="hover">
+                          <line class="hover-rule" x1="200.33" x2="200.33" y1="5.5" y2="86.5"></line>
+                          <circle class="hover-dot claude" cx="200.33" cy="10.62" r="2.75"></circle>
+                          <circle class="hover-dot codex" cx="200.33" cy="82.35" r="2.75"></circle>
+                        </g>
+                      </svg>
+                      <div class="tip is-flip" style="--x: 84.887%" aria-hidden="true">
+                        <div class="tip-day">Tue, Sep 15</div>
+                        <div class="tip-row"><img class="tip-logo claude" src="claude-logo.png" alt="" width="9" height="9"><span class="tip-name">Claude</span><span class="tip-val">937M</span></div>
+                        <div class="tip-row"><img class="tip-logo codex" src="openai-logo.png" alt="" width="9" height="9"><span class="tip-name">Codex</span><span class="tip-val">51.2M</span></div>
+                        <div class="tip-div"></div>
+                        <div class="tip-row tip-total"><span class="tip-name">Total</span><span class="tip-val">988M</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card a-split">
+                  <div class="a-row">
+                    <div class="a-row-top">
+                      <span class="a-dot claude"></span>
+                      <img class="p-logo" src="claude-logo.png" alt="" width="14" height="14">
+                      <span class="a-name">Claude</span>
+                      <span class="a-sessions">107 sessions</span>
+                      <span class="a-value">2.62B</span>
+                    </div>
+                    <div class="a-detail">94.7% of tokens · $1,101.11</div>
+                  </div>
+                  <div class="c-div"></div>
+                  <div class="a-row">
+                    <div class="a-row-top">
+                      <span class="a-dot codex"></span>
+                      <img class="p-logo" src="openai-logo.png" alt="" width="14" height="14">
+                      <span class="a-name">Codex</span>
+                      <span class="a-sessions">17 sessions</span>
+                      <span class="a-value">145M</span>
+                    </div>
+                    <div class="a-detail">5.3% of tokens · $156.79</div>
+                  </div>
+                </div>
               </div>
-              <span class="track"><span class="fill red" style="--pct:92%"></span></span>
+            </div>
+
+            <!-- Cost: the same week at API list prices. -->
+            <div class="view" id="view-cost" role="tabpanel" aria-labelledby="tab-cost" tabindex="0" data-view="cost">
+              <div class="view-body" role="img" aria-label="Cost tab, last 7 days: $1,257.90 across 124 sessions, estimated at API prices. Daily cost chart, September 10 to 16, busiest on Tuesday, September 15 with $437.53. Claude: $1,101.11, 87.5% of the cost, 107 sessions, 2.62 billion tokens. Codex: $156.79, 12.5% of the cost, 17 sessions, 145 million tokens.">
+                <div class="card a-hero">
+                  <!-- The range picker, mini and inside the card: it scopes the numbers
+                       under it, not the panel. Only 7d has data here. -->
+                  <div class="seg-mini">
+                    <span class="seg-item">24h</span>
+                    <span class="seg-item is-on">7d</span>
+                    <span class="seg-item">30d</span>
+                    <span class="seg-item">90d</span>
+                  </div>
+                  <div class="a-head">
+                    <span class="a-total">$1,257.90</span>
+                    <span class="a-caption">124 sessions · API estimate</span>
+                  </div>
+                  <div class="a-plot">
+                    <span class="a-title">Daily cost</span>
+                    <!-- Static SVG, so the view renders without the script: monotone
+                         curves through each day, precomputed, like the app's chart.
+                         `data-chart` holds each day's position and figures for the hover. -->
+                    <div class="chart" data-chart='{"w":236,"x":[27.0,61.67,96.33,131.0,165.67,200.33,235.0],"days":["Thu, Sep 10","Fri, Sep 11","Sat, Sep 12","Sun, Sep 13","Mon, Sep 14","Tue, Sep 15","Wed, Sep 16"],"y":[[65.39,69.25,79.81,71.5,42.92,24.45,73.8],[82.45,83.51,86.5,85.58,81.71,77.67,82.69]],"v":[["$130.31","$106.48","$41.29","$92.62","$268.99","$383.01","$78.41"],["$24.98","$18.48","$0.00","$5.68","$29.59","$54.52","$23.54"]],"total":["$155.29","$124.96","$41.29","$98.30","$298.58","$437.53","$101.95"]}'>
+                      <svg class="chart-svg" viewBox="0 0 236 104" width="236" height="104" aria-hidden="true" focusable="false">
+                        <line class="grid" x1="27" x2="236" y1="5.5" y2="5.5"></line>
+                        <text class="axis" x="22" y="5.5" dy="0.34em" text-anchor="end">$500</text>
+                        <line class="grid" x1="27" x2="236" y1="46" y2="46"></line>
+                        <text class="axis" x="22" y="46" dy="0.34em" text-anchor="end">$250</text>
+                        <line class="grid" x1="27" x2="236" y1="86.5" y2="86.5"></line>
+                        <text class="axis" x="22" y="86.5" dy="0.34em" text-anchor="end">$0</text>
+                        <text class="axis" x="27" y="100.5" text-anchor="start">SEP 10</text>
+                        <text class="axis" x="131" y="100.5" text-anchor="middle">SEP 13</text>
+                        <text class="axis" x="235" y="100.5" text-anchor="end">SEP 16</text>
+                        <path class="area claude" d="M27 65.39C38.56 66.12 50.11 66.85 61.67 69.25C73.22 71.65 84.78 79.81 96.33 79.81C107.89 79.81 119.44 77.04 131 71.5C142.56 65.95 154.11 50.76 165.67 42.92C177.22 35.08 188.78 24.45 200.33 24.45C211.89 24.45 223.44 49.12 235 73.8L235 86.5L27 86.5Z"></path>
+                        <path class="area codex" d="M27 82.45C38.56 82.64 50.11 82.83 61.67 83.51C73.22 84.18 84.78 86.5 96.33 86.5C107.89 86.5 119.44 86.19 131 85.58C142.56 84.97 154.11 83.03 165.67 81.71C177.22 80.39 188.78 77.67 200.33 77.67C211.89 77.67 223.44 80.18 235 82.69L235 86.5L27 86.5Z"></path>
+                        <path class="line claude" d="M27 65.39C38.56 66.12 50.11 66.85 61.67 69.25C73.22 71.65 84.78 79.81 96.33 79.81C107.89 79.81 119.44 77.04 131 71.5C142.56 65.95 154.11 50.76 165.67 42.92C177.22 35.08 188.78 24.45 200.33 24.45C211.89 24.45 223.44 49.12 235 73.8"></path>
+                        <path class="line codex" d="M27 82.45C38.56 82.64 50.11 82.83 61.67 83.51C73.22 84.18 84.78 86.5 96.33 86.5C107.89 86.5 119.44 86.19 131 85.58C142.56 84.97 154.11 83.03 165.67 81.71C177.22 80.39 188.78 77.67 200.33 77.67C211.89 77.67 223.44 80.18 235 82.69"></path>
+                        <g class="hover">
+                          <line class="hover-rule" x1="200.33" x2="200.33" y1="5.5" y2="86.5"></line>
+                          <circle class="hover-dot claude" cx="200.33" cy="24.45" r="2.75"></circle>
+                          <circle class="hover-dot codex" cx="200.33" cy="77.67" r="2.75"></circle>
+                        </g>
+                      </svg>
+                      <div class="tip is-flip" style="--x: 84.887%" aria-hidden="true">
+                        <div class="tip-day">Tue, Sep 15</div>
+                        <div class="tip-row"><img class="tip-logo claude" src="claude-logo.png" alt="" width="9" height="9"><span class="tip-name">Claude</span><span class="tip-val">$383.01</span></div>
+                        <div class="tip-row"><img class="tip-logo codex" src="openai-logo.png" alt="" width="9" height="9"><span class="tip-name">Codex</span><span class="tip-val">$54.52</span></div>
+                        <div class="tip-div"></div>
+                        <div class="tip-row tip-total"><span class="tip-name">Total</span><span class="tip-val">$437.53</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card a-split">
+                  <div class="a-row">
+                    <div class="a-row-top">
+                      <span class="a-dot claude"></span>
+                      <img class="p-logo" src="claude-logo.png" alt="" width="14" height="14">
+                      <span class="a-name">Claude</span>
+                      <span class="a-sessions">107 sessions</span>
+                      <span class="a-value">$1,101.11</span>
+                    </div>
+                    <div class="a-detail">87.5% of cost · 2.62B tokens</div>
+                  </div>
+                  <div class="c-div"></div>
+                  <div class="a-row">
+                    <div class="a-row-top">
+                      <span class="a-dot codex"></span>
+                      <img class="p-logo" src="openai-logo.png" alt="" width="14" height="14">
+                      <span class="a-name">Codex</span>
+                      <span class="a-sessions">17 sessions</span>
+                      <span class="a-value">$156.79</span>
+                    </div>
+                    <div class="a-detail">12.5% of cost · 145M tokens</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="card" style="--accent: var(--codex)">
-            <div class="p-head">
-              <img class="p-logo" src="codex-logo.png" alt="" width="14" height="14">
-              <span class="p-name">Codex</span>
-              <span class="p-badge">Plus</span>
-            </div>
-            <div class="win">
-              <div class="win-top">
-                <span class="win-label">5h</span>
-                <span class="win-reset">4h 41m</span>
-                <span class="win-pct">46%<span class="win-mode">used</span></span>
+          <!-- Shared by every tab, as in the app. -->
+          <div class="panel-foot" role="img" aria-label="Settings, shared by every tab. Menu bar: provider Auto (highest), style 5hr and weekly, show remaining off. General: launch at login on, Claude config Auto. Updated just now, version 1.5.1, with a Quit button.">
+            <!-- Settings, in the app's two titled groups: what the menu-bar item
+                 shows, then everything else. -->
+            <div class="card settings">
+              <div class="s-group">
+                <div class="s-title">Menu Bar</div>
+                <div class="s-row">
+                  <span class="s-label">Provider</span>
+                  <span class="s-menu">Auto (highest)<svg class="chev" viewBox="0 0 12 12" width="9" height="9" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+                </div>
+                <div class="s-row">
+                  <span class="s-label">Style</span>
+                  <span class="s-menu">5hr and weekly<svg class="chev" viewBox="0 0 12 12" width="9" height="9" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+                </div>
+                <div class="s-row">
+                  <span class="s-label">Show remaining</span>
+                  <span class="sw"></span>
+                </div>
               </div>
-              <span class="track"><span class="fill accent" style="--pct:46%"></span></span>
-            </div>
-            <div class="win">
-              <div class="win-top">
-                <span class="win-label">Weekly</span>
-                <span class="win-reset">6d 1h</span>
-                <span class="win-pct">58%<span class="win-mode">used</span></span>
+
+              <div class="s-div"></div>
+
+              <div class="s-group">
+                <div class="s-title">General</div>
+                <div class="s-row">
+                  <span class="s-label">Launch at Login</span>
+                  <span class="sw is-on"></span>
+                </div>
+                <div class="s-row">
+                  <span class="s-label">Claude config</span>
+                  <span class="s-menu">Auto<svg class="chev" viewBox="0 0 12 12" width="9" height="9" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
+                </div>
               </div>
-              <span class="track"><span class="fill accent" style="--pct:58%"></span></span>
             </div>
-            <!-- Codex hands out free rate-limit resets; they sit under the bars
-                 they can clear, behind a divider, with the redeem beside them. -->
-            <div class="c-div"></div>
-            <div class="reset">
-              <span class="reset-text">
-                <span class="reset-count">3 free resets</span>
-                <span class="reset-expiry">First expires Sep 21</span>
+
+            <div class="p-footer">
+              <span class="pf-updated">Updated just now
+                <svg class="pf-refresh" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+                  <path d="M13 8a5 5 0 1 1-1.5-3.5"></path>
+                  <path d="M13 3v2.6h-2.6"></path>
+                </svg>
               </span>
-              <span class="btn-mini">Reset now</span>
+              <span class="pf-end">
+                <span class="pf-version">v1.5.1</span>
+                <span class="pf-quit">Quit</span>
+              </span>
             </div>
-          </div>
-
-          <div class="card" style="--accent: var(--gemini)">
-            <div class="p-head">
-              <img class="p-logo" src="gemini-logo.png" alt="" width="14" height="14">
-              <span class="p-name">Gemini</span>
-            </div>
-            <div class="win">
-              <div class="win-top">
-                <span class="win-label">Daily</span>
-                <span class="win-reset">34m</span>
-                <span class="win-pct">7%<span class="win-mode">used</span></span>
-              </div>
-              <span class="track"><span class="fill accent" style="--pct:7%"></span></span>
-            </div>
-          </div>
-
-          <!-- Settings, in the app's two titled groups: what the menu-bar item
-               shows, then everything else. -->
-          <div class="card settings">
-            <div class="s-group">
-              <div class="s-title">Menu Bar</div>
-              <div class="s-row">
-                <span class="s-label">Provider</span>
-                <span class="s-menu">Auto (highest)<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
-              </div>
-              <div class="s-row">
-                <span class="s-label">Style</span>
-                <span class="s-menu">5hr and weekly<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
-              </div>
-              <div class="s-row">
-                <span class="s-label">Show remaining</span>
-                <span class="sw" role="switch" aria-checked="false"></span>
-              </div>
-            </div>
-
-            <div class="s-div"></div>
-
-            <div class="s-group">
-              <div class="s-title">General</div>
-              <div class="s-row">
-                <span class="s-label">Launch at Login</span>
-                <span class="sw is-on" role="switch" aria-checked="true"></span>
-              </div>
-              <div class="s-row">
-                <span class="s-label">Claude config</span>
-                <span class="s-menu">Auto<svg class="chev" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5 6 7.5 9 4.5"></path></svg></span>
-              </div>
-            </div>
-          </div>
-
-          <div class="p-footer">
-            <span class="pf-updated">Updated just now
-              <svg class="pf-refresh" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
-                <path d="M13 8a5 5 0 1 1-1.5-3.5"></path>
-                <path d="M13 3v2.6h-2.6"></path>
-              </svg>
-            </span>
-            <span class="pf-end">
-              <span class="pf-version">v1.5.1</span>
-              <span class="pf-quit">Quit</span>
-            </span>
           </div>
         </div>
       </div>
@@ -234,13 +427,19 @@
         <details class="faq-item">
           <summary>Which tools does it track?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
-            <p>Claude Code, Codex, and Gemini (via Antigravity or the Gemini CLI). For each one it shows the rate-limit windows, 5-hour and weekly, as percent used with the time until they reset. When Codex grants you free rate-limit resets, it shows how many you have and lets you redeem one right from the dropdown.</p>
+            <p>Claude Code, Codex, and Gemini (via Antigravity or the Gemini CLI). For each one it shows the rate-limit windows (5-hour and weekly, or daily for Gemini) as percent used, with the time until they reset. When Codex grants you free rate-limit resets, it shows how many you have and lets you redeem one right from the dropdown. For Claude Code and Codex, the Tokens and Cost tabs also add up how much you've used over time.</p>
           </div>
         </details>
         <details class="faq-item">
           <summary>What does the menu-bar item show?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
             <p>The tool's own mark inside a ring that fills as its 5-hour window is used, then the numbers beside it. It follows whichever provider is closest to its limit unless you pin one, and you can trim it down to the 5-hour figure, to a bare ring, or spread it out to one ring per provider. The full picture is always a click away in the dropdown.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary>What do the Tokens and Cost tabs show?<span class="faq-mark" aria-hidden="true"></span></summary>
+          <div class="faq-a">
+            <p>A look back, rather than at the limits. Tokens adds up what Claude Code and Codex processed over the last 24 hours or 7, 30, or 90 days, charted with a line for each; Cost puts an API-equivalent price on the same tokens. Both are read from the session logs those two tools already keep on your Mac, so Gemini shows up under Limits only. Cost is an estimate at API list prices, not a bill: subscription plans aren't billed per token, so read it as a measure of how much you use, not what you pay.</p>
           </div>
         </details>
         <details class="faq-item">
@@ -252,7 +451,7 @@
         <details class="faq-item">
           <summary>Where does my usage data go?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
-            <p>Nowhere else. It reads local credentials and talks only to each provider's own usage endpoint. Nothing is sent anywhere else. No analytics, no telemetry.</p>
+            <p>It stays between your Mac and each provider. Your limits come from the provider itself, asked for with the sign-in its own tool already keeps, and the Tokens and Cost figures are worked out on your Mac from Claude Code's and Codex's session logs. The app's only other requests go to GitHub, and none of them carries your usage: a check for new releases (plus the update itself, if you choose to install one) and, at most once a day, LiteLLM's public model price table for the cost estimate. No analytics, no telemetry.</p>
           </div>
         </details>
         <details class="faq-item">
@@ -315,6 +514,154 @@
         });
       }, { rootMargin: '0px 0px -12% 0px', threshold: 0.15 });
       els.forEach(function (e) { io.observe(e); });
+    })();
+  </script>
+
+  <!-- The mockup's tabs and chart hover. Progressive: with no JS the panel
+       stays on Limits, and the Tokens and Cost charts are static SVG anyway. -->
+  <script>
+    (function () {
+      var panel = document.querySelector('.panel[data-tab]');
+      if (!panel) return;
+      var wrap = panel.closest('.mockup-wrap');
+      var views = panel.querySelector('.views');
+      var tabs = [].slice.call(panel.querySelectorAll('[role="tab"]'));
+      var charts = [].slice.call(panel.querySelectorAll('.chart[data-chart]'));
+      var reduce = matchMedia('(prefers-reduced-motion: reduce)');
+      // The markup leaves Tokens and Cost disabled for a page without this
+      // script; with it, they work.
+      tabs.forEach(function (t) { t.removeAttribute('aria-disabled'); });
+
+      // Hold the wrapper at the tallest view's height so a switch never moves
+      // the page below; the panel inside still grows and shrinks from the top.
+      function reserve() {
+        var tallest = 0;
+        panel.querySelectorAll('.view').forEach(function (v) {
+          tallest = Math.max(tallest, v.getBoundingClientRect().height);
+        });
+        wrap.style.minHeight = '';
+        var rest = wrap.getBoundingClientRect().height - views.getBoundingClientRect().height;
+        wrap.style.minHeight = Math.ceil(rest + tallest) + 'px';
+      }
+      var pending = 0;
+      function reserveSoon() {
+        cancelAnimationFrame(pending);
+        pending = requestAnimationFrame(reserve);
+      }
+      reserve();
+      addEventListener('resize', reserveSoon);
+      addEventListener('load', reserveSoon);
+      if (document.fonts) document.fonts.ready.then(reserveSoon);
+
+      function hideHover() {
+        charts.forEach(function (c) { c.classList.remove('is-hover'); });
+      }
+
+      function settle() {
+        views.classList.remove('is-resizing');
+        views.style.height = '';
+      }
+      views.addEventListener('transitionend', function (e) {
+        if (e.target === views && e.propertyName === 'height') settle();
+      });
+
+      function select(tab, focus) {
+        if (focus) tab.focus();
+        var name = tab.getAttribute('data-for');
+        if (panel.getAttribute('data-tab') === name) return;
+        var from = views.getBoundingClientRect().height;
+        panel.setAttribute('data-tab', name);
+        tabs.forEach(function (t) {
+          t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+          t.tabIndex = t === tab ? 0 : -1;
+        });
+        hideHover();
+        settle();
+        if (reduce.matches) return;
+        var view = document.getElementById(tab.getAttribute('aria-controls'));
+        view.classList.remove('is-entering');
+        void view.offsetWidth;
+        view.classList.add('is-entering');
+        // Ease from the old view's height to the new one's.
+        var to = views.getBoundingClientRect().height;
+        if (Math.abs(to - from) < 1) return;
+        views.style.height = from + 'px';
+        views.getBoundingClientRect();
+        views.classList.add('is-resizing');
+        views.style.height = to + 'px';
+      }
+
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () { select(t, false); });
+      });
+      // Arrow keys move along the tabs and select as they go; Home and End
+      // jump to the ends.
+      panel.querySelector('[role="tablist"]').addEventListener('keydown', function (e) {
+        var i = tabs.indexOf(document.activeElement);
+        if (i < 0) return;
+        var n = tabs.length;
+        var j = { ArrowRight: (i + 1) % n, ArrowLeft: (i + n - 1) % n, Home: 0, End: n - 1 }[e.key];
+        if (j === undefined) return;
+        e.preventDefault();
+        select(tabs[j], true);
+      });
+
+      // Chart hover: snap to the nearest day, move the rule, dots, and card
+      // there, and fill the card in. A tap does the same on touch screens.
+      charts.forEach(function (chart) {
+        var data = JSON.parse(chart.getAttribute('data-chart'));
+        var svg = chart.querySelector('svg');
+        var rule = chart.querySelector('.hover-rule');
+        var dots = chart.querySelectorAll('.hover-dot');
+        var tip = chart.querySelector('.tip');
+        var day = tip.querySelector('.tip-day');
+        var vals = tip.querySelectorAll('.tip-val');
+        // The card's width is fixed in CSS; it's laid out while hidden, so
+        // read it once here rather than on every move.
+        var tipW = tip.offsetWidth;
+        var at = -1, atWidth = 0;
+
+        function show(clientX) {
+          // All the reading first (the chart's box is the one layout read),
+          // then nothing at all to do while the pointer stays on one day.
+          var box = svg.getBoundingClientRect();
+          var k = box.width / data.w;
+          var x = (clientX - box.left) / k;
+          var i = 0;
+          data.x.forEach(function (px, j) {
+            if (Math.abs(px - x) < Math.abs(data.x[i] - x)) i = j;
+          });
+          if (i === at && box.width === atWidth && chart.classList.contains('is-hover')) return;
+          at = i;
+          atWidth = box.width;
+          // Beside the rule on whichever side has room, kept inside the chart.
+          var ruleX = data.x[i] * k;
+          var left = ruleX + 8 + tipW <= box.width ? ruleX + 8 : ruleX - 8 - tipW;
+          left = Math.min(Math.max(0, left), Math.max(0, box.width - tipW));
+
+          rule.setAttribute('x1', data.x[i]);
+          rule.setAttribute('x2', data.x[i]);
+          dots.forEach(function (dot, s) {
+            dot.setAttribute('cx', data.x[i]);
+            dot.setAttribute('cy', data.y[s][i]);
+          });
+          day.textContent = data.days[i];
+          data.v.forEach(function (v, s) { vals[s].textContent = v[i]; });
+          vals[vals.length - 1].textContent = data.total[i];
+          tip.style.left = left + 'px';
+          chart.classList.add('is-hover');
+        }
+
+        chart.addEventListener('pointermove', function (e) { show(e.clientX); });
+        chart.addEventListener('pointerdown', function (e) { show(e.clientX); });
+        chart.addEventListener('pointerleave', function (e) {
+          if (e.pointerType !== 'touch') chart.classList.remove('is-hover');
+        });
+      });
+      // A tap anywhere else puts a touch hover away.
+      document.addEventListener('pointerdown', function (e) {
+        if (!(e.target.closest && e.target.closest('.chart'))) hideHover();
+      });
     })();
   </script>
 </body>

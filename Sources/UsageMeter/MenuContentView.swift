@@ -5,33 +5,22 @@ struct MenuContentView: View {
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var updates = UpdateChecker.shared
     @State private var installer = UpdateInstaller.shared
+    @State private var activity = ActivityStore.shared
+    /// The view lives as long as the app, so the tab sticks across opens and
+    /// is back on Limits after a relaunch.
+    @State private var tab: UsageTab = UsageTab.launchArgument ?? .limits
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if store.providers.isEmpty {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Loading…").foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 8)
-            } else if store.visibleProviders.isEmpty {
-                noProvidersDetected
-            } else {
-                // Each provider sits in its own soft card — grouping comes from
-                // the surface, not dividers, which keeps sections scannable.
-                ForEach(store.visibleProviders) { provider in
-                    let style = store.style(for: provider.name)
-                    ProviderRow(
-                        provider: provider,
-                        accent: style.accent,
-                        logoResource: style.logoResource,
-                        showRemaining: store.showRemaining,
-                        resetState: provider.name == "Codex" ? store.codexReset : .idle,
-                        redeem: provider.name == "Codex"
-                            ? { Task { await store.redeemCodexReset() } } : nil
-                    )
-                    .cardSurface()
-                }
+            tabBar
+
+            switch tab {
+            case .limits:
+                limits
+            case .tokens:
+                ActivityView(activity: activity, metric: .tokens, style: store.style(for:))
+            case .cost:
+                ActivityView(activity: activity, metric: .cost, style: store.style(for:))
             }
 
             settingsCard
@@ -47,6 +36,15 @@ struct MenuContentView: View {
         }
         .padding(12)
         .frame(width: 280)
+        // Exactly its ideal height, with no give. `positionPanel` sizes the
+        // panel to that, but the hosting view also holds the window between
+        // the content's minimum and maximum heights, and after the content
+        // changes while the panel is open, AppKit's layout can settle the
+        // window at the minimum. With any give (the Tokens and Cost headline
+        // may shrink its font) the panel could come up short, its content
+        // squeezed. Where its top edge sits is `DropdownPanel`'s job either
+        // way.
+        .fixedSize(horizontal: false, vertical: true)
         // Per-open work (stale refetch, update check) lives in
         // `StatusBarController.show()` — this view stays parented to the
         // persistent panel, so `onAppear` fires only once per app lifetime.
@@ -59,6 +57,55 @@ struct MenuContentView: View {
             launchAtLogin = LoginItem.isEnabled
         }
         .onAppear { launchAtLogin = LoginItem.isEnabled }
+        // Picking Tokens or Cost is remembered, so later opens warm the scan
+        // in the background (see `UsageStore.hasUsedActivityTabs`). A switch
+        // scans here when that hasn't covered it: the first visit ever, which
+        // starts the first scan, or the panel having sat open past staleness.
+        .onChange(of: tab) { _, newTab in
+            store.noteTabSelected(newTab)
+            if newTab != .limits, activity.isStale {
+                Task { await activity.refresh() }
+            }
+        }
+    }
+
+    /// Limits first: it's what the app has always been, and the other two
+    /// tabs are views onto history rather than live state.
+    private var tabBar: some View {
+        Picker("View", selection: $tab) {
+            ForEach(UsageTab.allCases) { tab in
+                Text(tab.label).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var limits: some View {
+        if store.providers.isEmpty {
+            LoadingRow("Loading…")
+        } else if store.visibleProviders.isEmpty {
+            noProvidersDetected
+        } else {
+            // Each provider sits in its own soft card — grouping comes from
+            // the surface, not dividers, which keeps sections scannable.
+            ForEach(store.visibleProviders) { provider in
+                let style = store.style(for: provider.name)
+                ProviderRow(
+                    provider: provider,
+                    accent: style.accent,
+                    logoResource: style.logoResource,
+                    showRemaining: store.showRemaining,
+                    resetState: provider.name == "Codex" ? store.codexReset : .idle,
+                    redeem: provider.name == "Codex"
+                        ? { Task { await store.redeemCodexReset() } } : nil
+                )
+                .cardSurface()
+            }
+        }
     }
 
     // Shown when none of the supported tools are installed on this machine — the
@@ -414,8 +461,13 @@ struct MenuContentView: View {
 
     // MARK: - Actions
 
+    /// Refreshes what's on screen: the limits always, and the session-log
+    /// scan too when an activity tab is showing.
     private func refreshNow() {
         Task { await store.refresh(force: true) }
+        if tab != .limits {
+            Task { await activity.refresh(force: true) }
+        }
     }
 
     private func quit() {
@@ -449,6 +501,25 @@ struct MenuContentView: View {
     }
 }
 
+/// What a tab shows until its first data lands: a small spinner and what
+/// it's waiting on. Later refreshes keep the last data on screen, so each tab
+/// shows this once at most.
+struct LoadingRow: View {
+    let label: LocalizedStringKey
+
+    init(_ label: LocalizedStringKey) {
+        self.label = label
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(label).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 8)
+    }
+}
+
 extension View {
     /// The panel's shared card treatment: a soft adaptive surface with a
     /// hairline stroke that crisps the edge (mostly visible in light mode).
@@ -460,5 +531,17 @@ extension View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.primary.opacity(0.05), in: shape)
             .overlay(shape.strokeBorder(Color.primary.opacity(0.07)))
+    }
+}
+
+extension UsageTab {
+    /// `--tab <limits|tokens|cost>` opens on that tab — a dev affordance so
+    /// `--snapshot` can render each one.
+    static var launchArgument: UsageTab? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "--tab"), args.indices.contains(i + 1) else {
+            return nil
+        }
+        return UsageTab(rawValue: args[i + 1].lowercased())
     }
 }
