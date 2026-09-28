@@ -147,8 +147,7 @@ struct ProviderRow: View {
                             Spacer(minLength: 4)
                             if redeem != nil {
                                 Button("Reset now") { confirmingReset = true }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
+                                    .buttonStyle(PanelButtonStyle())
                                     .font(.system(size: 10, weight: .medium))
                                     .help(
                                         "Spend one free reset to clear your current "
@@ -179,14 +178,13 @@ struct ProviderRow: View {
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
                 Button("Cancel") { confirmingReset = false }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(PanelButtonStyle())
                 Button("Reset") {
                     confirmingReset = false
                     redeem?()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PanelButtonStyle(prominent: true))
             }
-            .controlSize(.small)
             .font(.system(size: 10, weight: .medium))
         }
     }

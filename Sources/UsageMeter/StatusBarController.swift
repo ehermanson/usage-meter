@@ -61,9 +61,18 @@ final class StatusBarController {
         let startedAt: CFTimeInterval
     }
 
+    /// `--snapshot` renders the panel without ever showing it: no menu-bar item,
+    /// the panel parked off every display, and nobody's keyboard focus taken.
+    /// A render is a dev loop run many times over; each run flashing a real
+    /// dropdown over whatever the user is doing is a lot to ask of them.
+    private static let rendersOffscreen = ProcessInfo.processInfo.arguments.contains("--snapshot")
+
     init(store: UsageStore) {
         self.store = store
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Zero length keeps a render's item out of the menu bar; the panel
+        // doesn't need its button to be placed off-screen.
+        statusItem = NSStatusBar.system.statusItem(
+            withLength: Self.rendersOffscreen ? 0 : NSStatusItem.variableLength)
 
         hostingView = ContentHostingView(rootView: MenuContentView(store: store))
         panel = Self.makePanel(content: hostingView)
@@ -499,6 +508,12 @@ final class StatusBarController {
         // from the real fitting size, not a stale/zero one.
         hostingView.layoutSubtreeIfNeeded()
         positionPanel()
+        if Self.rendersOffscreen {
+            // Ordered in so it lays out and draws like the real thing, but
+            // never made key: that would take keystrokes from the user's app.
+            panel.orderFrontRegardless()
+            return
+        }
         panel.makeKeyAndOrderFront(nil)
         isHighlighted = true
         render()
@@ -559,6 +574,15 @@ final class StatusBarController {
     // MARK: - Positioning
 
     private func positionPanel() {
+        if Self.rendersOffscreen {
+            let size = hostingView.fittingSize
+            guard size.width > 0, size.height > 0 else { return }
+            // Well past any display's edge, whatever the arrangement.
+            let parked: CGFloat = -30_000
+            panel.anchor = DropdownPanel.Anchor(top: parked, x: parked, minY: 2 * parked)
+            panel.setFrame(NSRect(origin: .zero, size: size), display: true)
+            return
+        }
         guard let buttonWindow = statusItem.button?.window,
             let buttonFrame = buttonScreenFrame
         else { return }

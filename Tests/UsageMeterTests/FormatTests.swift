@@ -101,3 +101,17 @@ struct FormatTests {
         #expect(weekdays.allSatisfy { !resetDays(10).contains($0) })
     }
 }
+
+@Suite("Config path label")
+struct ConfigPathLabelTests {
+    @Test("short labels pass through; long ones keep both ends")
+    func middleTruncation() {
+        #expect(MenuContentView.middleTruncated("Auto", limit: 26) == "Auto")
+        let long = "~/Library/Application Support/claude-profiles/work/.claude"
+        let short = MenuContentView.middleTruncated(long, limit: 26)
+        #expect(short.count == 26)
+        #expect(short.hasPrefix("~/Library/Ap"))
+        #expect(short.hasSuffix("work/.claude"))
+        #expect(short.contains("…"))
+    }
+}

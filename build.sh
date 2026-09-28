@@ -29,10 +29,21 @@ VERSION="${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' 
 VERSION="${VERSION:-1.0.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
 
-echo "==> Compiling ${APP_NAME} ${VERSION} (build ${BUILD_NUMBER}, ${CONFIG})..."
-swift build -c "${CONFIG}"
+# Link against the SDK by path. AppKit picks each control's look by the SDK
+# version stamped into the binary, and SwiftPM's newer build system (Xcode 27)
+# stamps the deployment target there instead — so a local build drew every
+# control in its macOS 14 look while CI's build shipped the current one. With
+# the SDK passed to the linker, the stamp is the real SDK and a local build
+# looks like what it would ship as.
+SWIFT_FLAGS=()
+if SDK_PATH="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null)" && [ -n "${SDK_PATH}" ]; then
+    SWIFT_FLAGS=(-Xswiftc -Xclang-linker -Xswiftc -isysroot -Xswiftc -Xclang-linker -Xswiftc "${SDK_PATH}")
+fi
 
-BIN_PATH="$(swift build -c "${CONFIG}" --show-bin-path)/${APP_NAME}"
+echo "==> Compiling ${APP_NAME} ${VERSION} (build ${BUILD_NUMBER}, ${CONFIG})..."
+swift build -c "${CONFIG}" ${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"}
+
+BIN_PATH="$(swift build -c "${CONFIG}" ${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"} --show-bin-path)/${APP_NAME}"
 APP_DIR="build/${APP_NAME}.app"
 MACOS_DIR="${APP_DIR}/Contents/MacOS"
 RES_DIR="${APP_DIR}/Contents/Resources"

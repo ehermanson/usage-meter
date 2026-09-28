@@ -271,18 +271,20 @@ struct MenuContentView: View {
             Divider()
             Button("Choose Folder…") { chooseClaudeConfigDir() }
         } label: {
-            // Bounded + middle-truncated so an arbitrarily long config path
+            // Shortened in the middle so an arbitrarily long config path
             // can't push the control out of the fixed-width card; the full
-            // path lives in the tooltip.
-            Text(store.claudeConfigDirLabel)
+            // path lives in the tooltip. Done on the string rather than with
+            // a bounded frame: older AppKit stretches the menu's button to
+            // fill that frame, leaving a short label like "Auto" stranded on
+            // the left with its chevron far off on the right.
+            Text(Self.middleTruncated(store.claudeConfigDirLabel, limit: 26))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: 150, alignment: .trailing)
         }
         .menuStyle(.borderlessButton)
         .controlSize(.small)
+        .fixedSize()
         .help(
             store.claudeConfigDir.map { "CLAUDE_CONFIG_DIR: \($0)" }
                 ?? "Where Claude Code keeps its sign-in (CLAUDE_CONFIG_DIR). "
@@ -375,8 +377,7 @@ struct MenuContentView: View {
                     updates.openDownload()
                 }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .buttonStyle(PanelButtonStyle(prominent: true))
             .font(.system(size: 10, weight: .medium))
             .help(
                 seamless
@@ -442,6 +443,16 @@ struct MenuContentView: View {
         } else {
             Text("—")
         }
+    }
+
+    /// "~/Library/Appl…/work/.claude" for anything longer than `limit`
+    /// characters, keeping both ends: the start says where it lives, the end
+    /// which profile it is.
+    static func middleTruncated(_ text: String, limit: Int) -> String {
+        guard text.count > limit, limit > 1 else { return text }
+        let tail = (limit - 1) / 2
+        let head = limit - 1 - tail
+        return "\(text.prefix(head))…\(text.suffix(tail))"
     }
 
     @ViewBuilder
