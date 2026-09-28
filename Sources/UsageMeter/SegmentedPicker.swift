@@ -11,6 +11,12 @@ import SwiftUI
 /// look and was tested in the other. Drawing it here pins the look everywhere:
 /// full width, equal segments, a neutral pill under the chosen one.
 ///
+/// The pill jumps rather than slides, as AppKit's does. Switching a tab or a
+/// range usually changes the panel's height in the same update, and an
+/// animation scoped to the selection also caught the labels shifting with
+/// that resize — they slid in from above or below, depending on whether the
+/// panel grew or shrank.
+///
 /// VoiceOver still gets a standard picker, via `accessibilityRepresentation`.
 struct SegmentedPicker<Value: Hashable>: View {
     let title: String
@@ -32,7 +38,6 @@ struct SegmentedPicker<Value: Hashable>: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
-    @Namespace private var pill
 
     var body: some View {
         HStack(spacing: 0) {
@@ -76,13 +81,11 @@ struct SegmentedPicker<Value: Hashable>: View {
                         )
                         .fill(pillFill)
                         .shadow(color: .black.opacity(0.14), radius: 0.75, y: 0.5)
-                        .matchedGeometryEffect(id: "pill", in: pill)
                     }
                 }
                 .contentShape(Rectangle())
         }
         .buttonStyle(SegmentButtonStyle())
-        .animation(.snappy(duration: 0.22), value: selection)
     }
 
     /// Hairline between two unchosen neighbors; hidden beside the pill, which
