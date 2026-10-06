@@ -129,7 +129,7 @@
           <div class="views">
             <!-- Limits: each provider's live windows in its own card. -->
             <div class="view" id="view-limits" role="tabpanel" aria-labelledby="tab-limits" tabindex="0" data-view="limits">
-              <div class="view-body" role="img" aria-label="Limits tab. Claude, Max plan: 5-hour window 84 percent used, resets in 2 hours 12 minutes; weekly window 92 percent used, resets in 3 days 4 hours. Codex, Plus plan: 5-hour window 46 percent used, resets in 4 hours 41 minutes; weekly window 58 percent used, resets in 6 days 1 hour; 3 free resets available, first expires September 21, with a Reset now button. Gemini: daily window 7 percent used, resets in 34 minutes.">
+              <div class="view-body" role="img" aria-label="Limits tab. Claude, Max plan: 5-hour window 84 percent used, resets in 2 hours 12 minutes, ahead of pace and on course to hit the limit in 32 minutes; weekly window 92 percent used, resets in 12 hours, on pace. Codex, Plus plan: 5-hour window 46 percent used, resets in 1 hour 20 minutes, room to spare and on track for about 63 percent; weekly window 58 percent used, resets in 2 days 23 hours, on pace; 3 free resets available, first expires September 21, with a Reset now button. Gemini: daily window 7 percent used, resets in 34 minutes, room to spare and on track for about 7 percent. Each bar has a marker where even usage would be.">
                 <div class="card" style="--accent: var(--claude)">
                   <div class="p-head">
                     <img class="p-logo" src="claude-logo.png" alt="" width="14" height="14">
@@ -142,15 +142,17 @@
                       <span class="win-reset">2h 12m</span>
                       <span class="win-pct">84%<span class="win-mode">used</span></span>
                     </div>
-                    <span class="track"><span class="fill yellow" style="--pct:84%"></span></span>
+                    <span class="bar"><span class="track"><span class="fill yellow" style="--pct:84%"></span></span><span class="tick" style="--at:56%"></span></span>
+                    <span class="pace ahead"><svg class="pace-glyph" viewBox="0 0 16 16" width="8" height="8" aria-hidden="true"><path fill="currentColor" d="M8 1.2c.5 0 1 .3 1.3.8l6 11.2c.5.9-.1 2-1.2 2H1.9c-1.1 0-1.7-1.1-1.2-2L6.7 2c.3-.5.8-.8 1.3-.8Z"/></svg><span>Ahead of pace · limit in 32m</span></span>
                   </div>
                   <div class="win">
                     <div class="win-top">
                       <span class="win-label">Weekly</span>
-                      <span class="win-reset">3d 4h</span>
+                      <span class="win-reset">12h 0m</span>
                       <span class="win-pct">92%<span class="win-mode">used</span></span>
                     </div>
-                    <span class="track"><span class="fill red" style="--pct:92%"></span></span>
+                    <span class="bar"><span class="track"><span class="fill red" style="--pct:92%"></span></span><span class="tick" style="--at:92.857%"></span></span>
+                    <span class="pace">On pace</span>
                   </div>
                 </div>
 
@@ -163,18 +165,20 @@
                   <div class="win">
                     <div class="win-top">
                       <span class="win-label">5h</span>
-                      <span class="win-reset">4h 41m</span>
+                      <span class="win-reset">1h 20m</span>
                       <span class="win-pct">46%<span class="win-mode">used</span></span>
                     </div>
-                    <span class="track"><span class="fill accent" style="--pct:46%"></span></span>
+                    <span class="bar"><span class="track"><span class="fill accent" style="--pct:46%"></span></span><span class="tick" style="--at:73.333%"></span></span>
+                    <span class="pace">Room to spare · on track for ~63%</span>
                   </div>
                   <div class="win">
                     <div class="win-top">
                       <span class="win-label">Weekly</span>
-                      <span class="win-reset">6d 1h</span>
+                      <span class="win-reset">2d 23h</span>
                       <span class="win-pct">58%<span class="win-mode">used</span></span>
                     </div>
-                    <span class="track"><span class="fill accent" style="--pct:58%"></span></span>
+                    <span class="bar"><span class="track"><span class="fill accent" style="--pct:58%"></span></span><span class="tick" style="--at:57.738%"></span></span>
+                    <span class="pace">On pace</span>
                   </div>
                   <!-- Codex hands out free rate-limit resets; they sit under the bars
                        they can clear, behind a divider, with the redeem beside them. -->
@@ -199,7 +203,8 @@
                       <span class="win-reset">34m</span>
                       <span class="win-pct">7%<span class="win-mode">used</span></span>
                     </div>
-                    <span class="track"><span class="fill accent" style="--pct:7%"></span></span>
+                    <span class="bar"><span class="track"><span class="fill accent" style="--pct:7%"></span></span><span class="tick" style="--at:97.639%"></span></span>
+                    <span class="pace">Room to spare · on track for ~7%</span>
                   </div>
                 </div>
               </div>
@@ -421,7 +426,7 @@
         <details class="faq-item" open>
           <summary>Why would I want this?<span class="faq-mark" aria-hidden="true"></span></summary>
           <div class="faq-a">
-            <p>Most coding tools bury your rate-limit usage behind a menu or a command, and if you use more than one, you're checking each separately. Usage Meter keeps every provider's current usage and reset time in your menu bar. The ring runs green to amber to red as a window fills, and the bars in the dropdown turn yellow at 75% and red at 90%, so you can pace your work or switch tools before you hit the wall.</p>
+            <p>Most coding tools bury your rate-limit usage behind a menu or a command, and if you use more than one, you're checking each separately. Usage Meter keeps every provider's current usage and reset time in your menu bar. The ring runs green to amber to red as a window fills, and the bars in the dropdown turn yellow at 75% and red at 90%, so you can pace your work or switch tools before you hit the wall. Each window also says whether you're ahead of pace, on pace, or have room to spare, with a marker on the bar where even usage would be, and when you're ahead, how long until you'd hit the limit.</p>
           </div>
         </details>
         <details class="faq-item">

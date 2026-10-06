@@ -148,15 +148,20 @@ enum ClaudeClient {
 
     /// Friendly labels + display order for known window keys. Any other key that
     /// looks like a window (numeric `utilization` + `resets_at`) is still shown.
-    private static let knownLabels: [(key: String, label: String)] = [
-        ("five_hour", "5h"),
-        ("seven_day", "Weekly · all"),
-        ("seven_day_opus", "Weekly · Opus"),
-        ("seven_day_sonnet", "Weekly · Sonnet"),
-        ("seven_day_oauth_apps", "Weekly · apps"),
-        ("seven_day_cowork", "Weekly · cowork"),
-        ("overage", "Overage"),
+    /// `duration` is the window's length, for pace; the payload doesn't carry
+    /// it, so it's implied by the key. Overage has no fixed span, so none.
+    private static let knownLabels: [(key: String, label: String, duration: TimeInterval?)] = [
+        ("five_hour", "5h", fiveHours),
+        ("seven_day", "Weekly · all", sevenDays),
+        ("seven_day_opus", "Weekly · Opus", sevenDays),
+        ("seven_day_sonnet", "Weekly · Sonnet", sevenDays),
+        ("seven_day_oauth_apps", "Weekly · apps", sevenDays),
+        ("seven_day_cowork", "Weekly · cowork", sevenDays),
+        ("overage", "Overage", nil),
     ]
+
+    private static let fiveHours: TimeInterval = 5 * 3600
+    private static let sevenDays: TimeInterval = 7 * 24 * 3600
 
     /// Exposed for tests. Maps a decoded `rate_limits` dict to provider usage.
     static func parse(_ limits: [String: Any], plan: String?) -> ProviderUsage {
@@ -166,8 +171,8 @@ enum ClaudeClient {
         // codenamed entries (amber_ladder, tangelo, omelette_promotional, …) that
         // become window-shaped when active but aren't real limits — an allowlist
         // keeps those from rendering as bogus rows.
-        for (key, label) in knownLabels {
-            if let w = window(limits[key], label: label) {
+        for (key, label, duration) in knownLabels {
+            if let w = window(limits[key], label: label, duration: duration) {
                 windows.append(w)
             }
         }
@@ -196,14 +201,16 @@ enum ClaudeClient {
 
     /// A window entry is a dict carrying a numeric `utilization` and `resets_at`;
     /// this skips non-window keys like `extra_usage`, `limits`, and `spend`.
-    private static func window(_ raw: Any?, label: String) -> UsageWindow? {
+    private static func window(
+        _ raw: Any?, label: String, duration: TimeInterval?
+    ) -> UsageWindow? {
         guard let dict = raw as? [String: Any],
             let util = (dict["utilization"] as? NSNumber)?.doubleValue,
             dict["resets_at"] is String
         else { return nil }
         return UsageWindow(
             label: label, usedPercent: util,
-            resetAt: Parse.isoDate(dict["resets_at"] as? String))
+            resetAt: Parse.isoDate(dict["resets_at"] as? String), duration: duration)
     }
 
     /// Per-model weekly limits arrive as `model_scoped`: an array of
@@ -218,7 +225,7 @@ enum ClaudeClient {
             else { return nil }
             return UsageWindow(
                 label: "Weekly · \(name)", usedPercent: util,
-                resetAt: Parse.isoDate(dict["resets_at"] as? String))
+                resetAt: Parse.isoDate(dict["resets_at"] as? String), duration: sevenDays)
         }
     }
 

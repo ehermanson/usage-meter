@@ -11,6 +11,11 @@ struct UsageWindow: Identifiable, Equatable, Codable {
     /// Optional caption shown where the reset countdown would go, for windows
     /// without a reset — e.g. a dollar-budget window's "$237 / $300".
     var detail: String? = nil
+    /// The window's full length (5h, 7d, 24h), when known — what pace is
+    /// measured against. Optional so snapshots cached before it existed still
+    /// decode, and nil for windows that aren't a fixed span of time (a spend
+    /// budget, overage).
+    var duration: TimeInterval? = nil
 
     var clampedFraction: Double { max(0, min(1, usedPercent / 100)) }
 

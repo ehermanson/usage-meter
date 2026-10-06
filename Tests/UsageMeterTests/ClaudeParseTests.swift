@@ -151,4 +151,27 @@ struct ClaudeParseTests {
         ClaudeClient.rememberConfigDir(from: root, defaults: defaults)
         #expect(defaults.string(forKey: key) == nil)
     }
+
+    @Test("window lengths come from the key: 5h, 7d for weekly and model-scoped, none otherwise")
+    func parsesDurations() {
+        let limits: [String: Any] = [
+            "five_hour": ["utilization": 10.0, "resets_at": "2026-06-18T20:00:00Z"],
+            "seven_day": ["utilization": 20.0, "resets_at": "2026-06-20T00:00:00Z"],
+            "seven_day_sonnet": ["utilization": 30.0, "resets_at": "2026-06-20T00:00:00Z"],
+            "overage": ["utilization": 5.0, "resets_at": "2026-06-20T00:00:00Z"],
+            "model_scoped": [
+                ["display_name": "Fable", "utilization": 40.0, "resets_at": "2026-06-20T00:00:00Z"]
+            ],
+            "spend": ["percent": 12.0, "enabled": true],
+        ]
+        let windows = ClaudeClient.parse(limits, plan: nil).allWindows
+        let byLabel = Dictionary(uniqueKeysWithValues: windows.map { ($0.label, $0.duration) })
+        #expect(byLabel["5h"] == .some(5 * 3600))
+        #expect(byLabel["Weekly · all"] == .some(7 * 24 * 3600))
+        #expect(byLabel["Weekly · Sonnet"] == .some(7 * 24 * 3600))
+        #expect(byLabel["Weekly · Fable"] == .some(7 * 24 * 3600))
+        // Overage and the dollar budget aren't fixed spans of time.
+        #expect(byLabel["Overage"] == .some(nil))
+        #expect(byLabel["Usage"] == .some(nil))
+    }
 }

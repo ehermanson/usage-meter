@@ -30,7 +30,10 @@ Pick how much the item shows under **Style**: 5-hour and weekly, 5-hour only,
 just the ring, or a ring per provider for tracking all of them side by side.
 Options that wouldn't change anything on your setup are hidden — a ring per
 provider needs more than one. The dropdown always has the full numbers whichever
-style is set. Also there: **Show remaining**, and **Launch at Login**.
+style is set. Each window also shows whether you're ahead of pace, on pace, or
+have room to spare, with a marker on the bar where even usage would be; when
+you're ahead, it says how long until you'd hit the limit. Also there: **Show
+remaining**, and **Launch at Login**.
 
 Two more tabs look back rather than at the limits. **Tokens** and **Cost** add
 up what Claude Code and Codex processed over the last 24 hours or 7, 30, or 90

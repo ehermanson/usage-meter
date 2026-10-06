@@ -130,4 +130,18 @@ struct CodexParseTests {
         #expect(usage.error != nil)
         #expect(!usage.hasWindows)
     }
+
+    @Test("window length comes from the reported minutes, and is absent when they are")
+    func parsesDurations() {
+        let root: [String: Any] = [
+            "rate_limits": [
+                "primary": ["used_percent": 5.0, "window_minutes": 300],
+                "secondary": ["used_percent": 9.0],
+            ]
+        ]
+        let windows = CodexClient.parse(root).allWindows
+        #expect(windows.count == 2)
+        #expect(windows[0].duration == TimeInterval(300 * 60))
+        #expect(windows[1].duration == nil)
+    }
 }

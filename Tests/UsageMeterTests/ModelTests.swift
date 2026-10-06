@@ -96,4 +96,21 @@ struct ModelTests {
         // decoded snapshot defaults back to true (only windowed rows are cached).
         #expect(decoded.detected)
     }
+
+    @Test("a cached window from before duration existed still decodes, with no length")
+    func decodesWindowWithoutDuration() throws {
+        let json = #"{"label":"5h","usedPercent":42,"resetAt":800000000}"#
+        let window = try JSONDecoder().decode(UsageWindow.self, from: Data(json.utf8))
+        #expect(window.label == "5h")
+        #expect(window.usedPercent == 42)
+        #expect(window.duration == nil)
+    }
+
+    @Test("duration round-trips through the cache")
+    func durationRoundTrips() throws {
+        let window = UsageWindow(label: "5h", usedPercent: 1, resetAt: nil, duration: 18000)
+        let decoded = try JSONDecoder().decode(
+            UsageWindow.self, from: try JSONEncoder().encode(window))
+        #expect(decoded.duration == 18000)
+    }
 }

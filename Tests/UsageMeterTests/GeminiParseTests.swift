@@ -66,6 +66,40 @@ struct GeminiParseTests {
         #expect(!usage.hasWindows)
         #expect(usage.retryable)
     }
+
+    @Test("Daily is 24h long when its percent and reset come from the same bucket")
+    func dailyDurationWhenSameClock() {
+        let buckets: [[String: Any]] = [
+            [
+                "modelId": "gemini-2.5-flash", "remainingFraction": 0.4,
+                "resetTime": reset(hoursFromNow: 6),
+            ],
+            [
+                "modelId": "gemini-3-flash-preview", "remainingFraction": 0.9,
+                "resetTime": reset(hoursFromNow: 10),
+            ],
+        ]
+        let window = GeminiClient.parse(buckets).allWindows[0]
+        #expect(window.usedPercent == 60)
+        #expect(window.duration == TimeInterval(24 * 3600))
+    }
+
+    @Test("no Daily length when the reset belongs to a different bucket than the percent")
+    func noDurationWhenClocksDiffer() {
+        // The fixture in collapsesToDaily: the busy bucket resets at 24h, an
+        // untouched one at 20h. Pace would pair 75% with the wrong countdown.
+        let buckets: [[String: Any]] = [
+            [
+                "modelId": "gemini-2.5-flash", "remainingFraction": 1.0,
+                "resetTime": reset(hoursFromNow: 20),
+            ],
+            [
+                "modelId": "gemini-3-flash-preview", "remainingFraction": 0.25,
+                "resetTime": reset(hoursFromNow: 24),
+            ],
+        ]
+        #expect(GeminiClient.parse(buckets).allWindows[0].duration == nil)
+    }
 }
 
 @Suite("Gemini credential selection")

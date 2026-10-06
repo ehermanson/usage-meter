@@ -38,7 +38,12 @@ struct ProviderRow: View {
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(pool.windows) { window in
-                        WindowBar(window: window, accent: accent, showRemaining: showRemaining)
+                        // A note alongside windows marks them as a stale
+                        // carried-forward snapshot (see below); pace would
+                        // judge that old percent against today's clock.
+                        WindowBar(
+                            window: window, accent: accent, showRemaining: showRemaining,
+                            showPace: provider.error == nil)
                     }
                 }
             }

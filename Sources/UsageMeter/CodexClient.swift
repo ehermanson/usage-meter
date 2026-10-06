@@ -185,7 +185,10 @@ enum CodexClient {
         if let epoch = Parse.num(d["resetsAt"] ?? d["resets_at"]) {
             reset = Date(timeIntervalSince1970: epoch)
         }
-        return UsageWindow(label: label, usedPercent: used, resetAt: reset)
+        // The reported length is what pace is measured against; a missing or
+        // nonsensical one leaves pace off rather than guessed from the label.
+        let duration = mins.flatMap { $0 > 0 ? $0 * 60 : nil }
+        return UsageWindow(label: label, usedPercent: used, resetAt: reset, duration: duration)
     }
 
     private static func labelFor(windowMinutes: Double?, fallback: String) -> String {

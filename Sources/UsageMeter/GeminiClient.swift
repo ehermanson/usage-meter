@@ -71,11 +71,15 @@ enum GeminiClient {
 
     // MARK: - Parsing (pure; unit-tested)
 
+    /// The free tier's quota is a daily budget.
+    private static let dailyWindow: TimeInterval = 24 * 3600
+
     /// Collapses the per-model buckets into a single "Daily" window: the free
     /// tier is a shared daily request budget, so we surface how close the most
     /// consumed available model is to its limit. Locked/epoch buckets are skipped.
     static func parse(_ buckets: [[String: Any]]) -> ProviderUsage {
         var maxUsed = 0.0
+        var maxUsedReset: Date?
         var soonestReset: Date?
         var available = false
 
@@ -85,17 +89,34 @@ enum GeminiClient {
                 reset.timeIntervalSinceNow > 0
             else { continue }  // skip locked/epoch
             available = true
-            maxUsed = max(maxUsed, (1 - fraction) * 100)
+            let used = (1 - fraction) * 100
+            // Track whose reset goes with the shown percent (ties take the
+            // sooner reset, matching the window's own).
+            if maxUsedReset == nil || used > maxUsed
+                || (used == maxUsed && reset < maxUsedReset!)
+            {
+                maxUsed = used
+                maxUsedReset = reset
+            }
             if soonestReset == nil || reset < soonestReset! { soonestReset = reset }
         }
 
         guard available else {
             return .failed(providerName, "No available quota", retryable: true)
         }
+        // The percent comes from the most-used bucket but the reset is the
+        // soonest across all of them, so the two can describe different
+        // buckets — an untouched model's quota may roll over hours before the
+        // busy one's. Pace divides one by the other, so the 24h length is only
+        // claimed when both come from the same clock; otherwise pace stays off
+        // rather than comparing one bucket's usage with another's countdown.
+        let sameClock =
+            maxUsedReset.map { abs($0.timeIntervalSince(soonestReset ?? $0)) < 60 } ?? false
         let window = UsageWindow(
             label: "Daily",
             usedPercent: max(0, min(100, maxUsed)),
-            resetAt: soonestReset)
+            resetAt: soonestReset,
+            duration: sameClock ? dailyWindow : nil)
         return .ok(providerName, pools: [UsagePool(title: nil, windows: [window])])
     }
 

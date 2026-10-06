@@ -748,6 +748,40 @@ h1 { animation-delay: 0.06s; }
 .fill.yellow { background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 65%, transparent), var(--warn)); }
 .fill.red { background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 65%, transparent), var(--danger)); }
 
+/* Pace: a tick at how far through its window the clock is, so fill running
+   past it reads as ahead. It overhangs the track by 2px top and bottom, which
+   is why it can't live inside the track's overflow clip. */
+.bar { position: relative; display: block; }
+.bar > .track { display: block; }
+.tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: clamp(0px, calc(var(--at) - 1px), calc(100% - 2px));
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 60%, transparent);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--surface) 50%, transparent);
+}
+/* One line under the bar: ahead takes orange and a warning glyph, the calm
+   verdicts stay quiet. Same 7px gap as the app (the .win gap is 6px, plus 1px
+   here), which clears the pace tick's 2px overhang with room to spare. */
+.pace {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-top: 1px;
+  font-family: var(--sans);
+  font-size: 9.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+  color: var(--text-2);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.pace.ahead { color: var(--claude-mark); opacity: 1; font-weight: 500; }
+.pace-glyph { flex: none; align-self: center; }
+
 @keyframes fill {
   from { width: 0; }
   to { width: var(--pct); }
