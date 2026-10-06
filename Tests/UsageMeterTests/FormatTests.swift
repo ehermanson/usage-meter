@@ -114,4 +114,14 @@ struct ConfigPathLabelTests {
         #expect(short.hasSuffix("work/.claude"))
         #expect(short.contains("…"))
     }
+
+    @Test("credit expiry countdown is measured from the injected now, not the wall clock")
+    func resetCreditExpiryUsesInjectedNow() {
+        // A `now` decades from the real clock: if the countdown read the wall
+        // clock instead, an expiry 5h 2m after it would come out as years.
+        let now = Date(timeIntervalSince1970: 4_000_000_000)
+        let credits = ResetCredits(
+            available: 1, earliestExpiry: now.addingTimeInterval(5 * 3600 + 2 * 60 + 5))
+        #expect(Format.resetCreditExpiry(credits, now: now) == "Expires in 5h 2m")
+    }
 }

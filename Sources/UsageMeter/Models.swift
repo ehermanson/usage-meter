@@ -188,7 +188,7 @@ enum Format {
         guard let expiry = credits.earliestExpiry else { return nil }
         let which = credits.available == 1 ? "Expires" : "First expires"
         if expiry.timeIntervalSince(now) < 24 * 3600 {
-            return "\(which) in \(resetDuration(expiry))"
+            return "\(which) in \(resetDuration(expiry, now: now))"
         }
         return "\(which) \(expiry.formatted(.dateTime.month(.abbreviated).day()))"
     }
