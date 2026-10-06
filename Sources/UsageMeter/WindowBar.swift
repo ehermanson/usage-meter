@@ -58,16 +58,15 @@ struct WindowBar: View {
                 Text(window.label)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.primary.opacity(0.85))
-                if let reset = window.resetAt, let now {
-                    Text(Format.resetDuration(reset, now: now))
+                // A dollar budget carries both its amounts and a reset; the
+                // amounts are the row's key fact, so they lead and the
+                // countdown follows. Rows with only one show just that one.
+                if let caption = headerCaption(now: now) {
+                    Text(caption)
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                         .monospacedDigit()
-                } else if let detail = window.detail {
-                    Text(detail)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
+                        .lineLimit(1)
                 }
                 Spacer()
                 // Name the direction the number runs — without it, 13% in used
@@ -171,6 +170,16 @@ struct WindowBar: View {
             .offset(x: x)
     }
 
+    /// The quiet text after the label: the detail (dollar amounts), the
+    /// countdown, or both joined the way the pace caption joins its parts.
+    private func headerCaption(now: Date?) -> String? {
+        let countdown = window.resetAt.flatMap { reset in
+            now.map { Format.resetDuration(reset, now: $0) }
+        }
+        let parts = [window.detail, countdown].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     private var displayedPercent: Double {
         showRemaining ? window.remainingPercent : window.usedPercent
     }
@@ -183,6 +192,9 @@ struct WindowBar: View {
 
     private func accessibilityValue(now: Date?, pace: UsagePace?) -> String {
         var value = "\(Format.percent(displayedPercent)) \(showRemaining ? "left" : "used")"
+        if let detail = window.detail {
+            value += ", \(detail)"
+        }
         if let reset = window.resetAt {
             value += ", \(Format.relativeReset(reset, now: now ?? Date()))"
         }

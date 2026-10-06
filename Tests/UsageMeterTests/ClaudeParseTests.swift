@@ -110,7 +110,8 @@ struct ClaudeParseTests {
         let windows = usage.allWindows
         #expect(windows.map(\.label) == ["Usage"])
         #expect(windows.first?.usedPercent == 79)
-        #expect(windows.first?.resetAt == nil)
+        // No reset in the payload; one is inferred from the calendar month.
+        #expect(windows.first?.resetAt != nil)
         #expect(windows.first?.detail == "$237 / $300")
     }
 
@@ -170,8 +171,68 @@ struct ClaudeParseTests {
         #expect(byLabel["Weekly · all"] == .some(7 * 24 * 3600))
         #expect(byLabel["Weekly · Sonnet"] == .some(7 * 24 * 3600))
         #expect(byLabel["Weekly · Fable"] == .some(7 * 24 * 3600))
-        // Overage and the dollar budget aren't fixed spans of time.
+        // Overage isn't a fixed span of time; the dollar budget is a month.
         #expect(byLabel["Overage"] == .some(nil))
-        #expect(byLabel["Usage"] == .some(nil))
+        #expect(byLabel["Usage"] != .some(nil))
+    }
+
+    /// A UTC instant from components, for pinning `now` in spend-month tests.
+    private func utc(
+        _ y: Int, _ m: Int, _ d: Int, _ h: Int = 0, _ min: Int = 0, _ sec: Int = 0
+    )
+        -> Date
+    {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal.date(
+            from: DateComponents(year: y, month: m, day: d, hour: h, minute: min, second: sec))!
+    }
+
+    /// The parsed spend window at `now`.
+    private func spend(percent: Double = 40, now: Date) -> UsageWindow? {
+        let limits: [String: Any] = ["spend": ["percent": percent, "enabled": true]]
+        return ClaudeClient.parse(limits, plan: nil, now: now).allWindows.first
+    }
+
+    private let day: TimeInterval = 24 * 3600
+
+    @Test(
+        "spend resets at 00:00 UTC on the first of next month and spans this month",
+        arguments: [
+            // mid-month, 31-day month
+            (2026, 7, 15, 12, 59, 59, 2026, 8, 31.0),
+            // 28-day February
+            (2026, 2, 10, 0, 0, 0, 2026, 3, 28.0),
+            // leap February
+            (2028, 2, 10, 0, 0, 0, 2028, 3, 29.0),
+            // December rolls into January
+            (2026, 12, 20, 0, 0, 0, 2027, 1, 31.0),
+            // the last second of a 30-day month still belongs to it
+            (2026, 9, 30, 23, 59, 59, 2026, 10, 30.0),
+        ])
+    func spendMonth(
+        y: Int, m: Int, d: Int, h: Int, min: Int, sec: Int,
+        resetY: Int, resetM: Int, days: Double
+    ) throws {
+        let w = try #require(spend(now: utc(y, m, d, h, min, sec)))
+        #expect(w.resetAt == utc(resetY, resetM, 1))
+        #expect(w.duration == days * day)
+    }
+
+    @Test("the month is the UTC one, even where the local date is already the next")
+    func spendMonthIsUTC() throws {
+        // 23:30 UTC on Jan 31 is already Feb 1 in Tokyo; the budget is still January's.
+        let now = utc(2026, 1, 31, 23, 30)
+        let w = try #require(spend(now: now))
+        #expect(w.resetAt == utc(2026, 2, 1))
+        #expect(w.duration == 31 * day)
+    }
+
+    @Test("a parsed spend window gets a pace: 79% on the 10th of a 30-day month is ahead")
+    func spendPace() throws {
+        let now = utc(2026, 9, 10)
+        let w = try #require(spend(percent: 79, now: now))
+        let pace = try #require(UsagePace(window: w, now: now))
+        #expect(pace.status == .aheadOfPace)
     }
 }

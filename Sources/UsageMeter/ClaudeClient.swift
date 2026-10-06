@@ -164,7 +164,10 @@ enum ClaudeClient {
     private static let sevenDays: TimeInterval = 7 * 24 * 3600
 
     /// Exposed for tests. Maps a decoded `rate_limits` dict to provider usage.
-    static func parse(_ limits: [String: Any], plan: String?) -> ProviderUsage {
+    /// `now` places the spend window in its calendar month (see `spendWindow`).
+    static func parse(
+        _ limits: [String: Any], plan: String?, now: Date = Date()
+    ) -> ProviderUsage {
         var windows: [UsageWindow] = []
 
         // Only known, user-facing windows. The payload also carries internal
@@ -189,7 +192,7 @@ enum ClaudeClient {
         // Dollar-budget usage (Enterprise plans, or any plan with extra usage
         // enabled) reports no time windows — just a monthly spend against a limit.
         // Surface it so those users see something instead of "No usage windows".
-        if let spend = spendWindow(limits["spend"]) {
+        if let spend = spendWindow(limits["spend"], now: now) {
             windows.append(spend)
         }
 
@@ -231,7 +234,7 @@ enum ClaudeClient {
 
     /// The `spend` entry is a monthly dollar budget (used vs limit), not a time
     /// window — shown only when enabled, with the dollar amounts as the caption.
-    private static func spendWindow(_ raw: Any?) -> UsageWindow? {
+    private static func spendWindow(_ raw: Any?, now: Date) -> UsageWindow? {
         guard let dict = raw as? [String: Any],
             (dict["enabled"] as? Bool) == true,
             let percent = (dict["percent"] as? NSNumber)?.doubleValue
@@ -242,7 +245,28 @@ enum ClaudeClient {
         } else {
             detail = nil
         }
-        return UsageWindow(label: "Usage", usedPercent: percent, resetAt: nil, detail: detail)
+        let month = utcMonth(containing: now)
+        return UsageWindow(
+            label: "Usage", usedPercent: percent, resetAt: month.end, detail: detail,
+            duration: month.end.timeIntervalSince(month.start))
+    }
+
+    /// The UTC calendar month containing `now`, as [start, end). The `spend`
+    /// payload carries no reset or period, so the window is inferred from
+    /// Anthropic's documented rule (Spend Limits API: "Currently `monthly` is
+    /// the only supported period; monthly spend resets at 00:00 UTC on the
+    /// first of each calendar month"; extra usage on other plans is documented
+    /// as resetting on the first of the month too). If the payload ever starts
+    /// reporting a period or reset, read it instead of this. Pinned to a UTC
+    /// Gregorian calendar — the user's own calendar and zone would put the
+    /// boundary at their local midnight — and month lengths come from the two
+    /// boundaries, so February and 31-day months are exact.
+    static func utcMonth(containing now: Date) -> (start: Date, end: Date) {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let start = cal.dateInterval(of: .month, for: now)!.start
+        let end = cal.date(byAdding: .month, value: 1, to: start)!
+        return (start, end)
     }
 
     /// Formats a `{amount_minor, currency, exponent}` money object as a whole-unit
