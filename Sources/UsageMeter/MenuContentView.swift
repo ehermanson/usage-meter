@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MenuContentView: View {
+    @AppStorage("companion.showConnectionUI") private var showConnectionUI = false
     @Bindable var store: UsageStore
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var updates = UpdateChecker.shared
@@ -146,6 +147,14 @@ struct MenuContentView: View {
             Divider().opacity(0.4)
 
             settingsGroup("General") {
+                if showConnectionUI {
+                    Button("Connect iPhone…", systemImage: "qrcode") {
+                        CompanionWindowController.shared.show()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                }
+
                 settingRow("Launch at Login") {
                     settingSwitch("Launch at Login", isOn: $launchAtLogin)
                         .onChange(of: launchAtLogin) { _, newValue in

@@ -1,0 +1,152 @@
+name: UsageMeterCompanion
+options:
+  deploymentTarget:
+    iOS: "17.0"
+  bundleIdPrefix: com.erichermanson.usagemeter
+packages:
+  UsageMeter:
+    path: ..
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: 2YN57RAL6Q
+    CODE_SIGN_STYLE: Automatic
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.8.1
+    TARGETED_DEVICE_FAMILY: "1,2"
+targets:
+  UsageMeterMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ../Sources/UsageMeter
+        excludes: [Resources]
+      - path: ../Sources/UsageMeter/Resources/claude-logo.png
+        buildPhase: resources
+      - path: ../Sources/UsageMeter/Resources/openai-logo.png
+        buildPhase: resources
+      - path: ../Sources/UsageMeter/Resources/gemini-logo.png
+        buildPhase: resources
+      - path: ../Sources/UsageMeter/Resources/UsageMeter.icns
+        buildPhase: resources
+    dependencies:
+      - package: UsageMeter
+        product: CompanionKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.erichermanson.usagemeter
+        PRODUCT_NAME: UsageMeter
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        CODE_SIGN_ENTITLEMENTS: macOS/UsageMeterMac.entitlements
+    info:
+      path: macOS/Info.plist
+      properties:
+        CFBundleDisplayName: Usage Meter
+        CFBundleIconFile: UsageMeter.icns
+        LSUIElement: true
+        CompanionCloudEnabled: true
+    entitlements:
+      path: macOS/UsageMeterMac.entitlements
+      properties:
+        com.apple.security.cs.disable-library-validation: true
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.erichermanson.usagemeter]
+        com.apple.developer.icloud-services: [CloudKit]
+    preBuildScripts:
+      - name: Bundle Claude helper
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          if [ ! -d "$SRCROOT/../helpers/node_modules" ]; then
+            (cd "$SRCROOT/../helpers" && npm ci --omit=dev --omit=optional)
+          fi
+          dest="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/helpers"
+          mkdir -p "$dest"
+          cp "$SRCROOT/../helpers/claude-usage.mjs" "$SRCROOT/../helpers/package.json" "$dest/"
+          rm -rf "$dest/node_modules"
+          cp -Rc "$SRCROOT/../helpers/node_modules" "$dest/node_modules"
+          rm -rf "$dest"/node_modules/@anthropic-ai/claude-agent-sdk-*
+  UsageMeterCompanion:
+    type: application
+    platform: iOS
+    sources:
+      - path: UsageMeter
+      - path: Shared
+      - path: PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: UsageMeter
+        product: CompanionKit
+      - target: UsageMeterWidgets
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.erichermanson.usagemeter.ios
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: UsageMeter/Info.plist
+      properties:
+        CFBundleDisplayName: Usage Meter
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [usagemeter]
+            CFBundleURLName: com.erichermanson.usagemeter.connect
+        NSCameraUsageDescription: Scan the connection code shown by Usage Meter on your Mac.
+        UILaunchScreen: {}
+        UIBackgroundModes: [fetch, remote-notification]
+        BGTaskSchedulerPermittedIdentifiers: [com.erichermanson.usagemeter.ios.refresh]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+    entitlements:
+      path: UsageMeter/UsageMeterCompanion.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.erichermanson.usagemeter]
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.security.application-groups: [group.com.erichermanson.usagemeter]
+        aps-environment: development
+  UsageMeterWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: UsageMeterWidgets
+      - path: Shared
+      - path: PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: UsageMeter
+        product: CompanionKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.erichermanson.usagemeter.ios.widgets
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+    info:
+      path: UsageMeterWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Usage Meter
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: UsageMeterWidgets/UsageMeterWidgets.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.erichermanson.usagemeter]
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.security.application-groups: [group.com.erichermanson.usagemeter]
+schemes:
+  UsageMeterMac:
+    build:
+      targets:
+        UsageMeterMac: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  UsageMeterCompanion:
+    build:
+      targets:
+        UsageMeterCompanion: all
+    run:
+      config: Debug
+    archive:
+      config: Release

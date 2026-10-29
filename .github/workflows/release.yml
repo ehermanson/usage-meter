@@ -13,6 +13,7 @@ name: Release
 #   APPLE_ID              Apple ID email used for notarization
 #   APPLE_TEAM_ID         10-char team id, e.g. 2YN57RAL6Q
 #   APPLE_APP_PASSWORD    app-specific password from appleid.apple.com
+#   COMPANION_PROFILE_BASE64 optional Developer ID profile with CloudKit enabled
 
 on:
   push:
@@ -97,7 +98,15 @@ jobs:
         env:
           CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
           NOTARY_PROFILE: usage-meter-notary
-        run: ./scripts/notarize.sh
+          COMPANION_PROFILE_BASE64: ${{ secrets.COMPANION_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "$COMPANION_PROFILE_BASE64" ]; then
+            profile="$RUNNER_TEMP/UsageMeter.provisionprofile"
+            printf '%s' "$COMPANION_PROFILE_BASE64" | base64 --decode > "$profile"
+            export COMPANION_PROVISIONING_PROFILE="$profile"
+          fi
+          ./scripts/notarize.sh
 
       - name: Publish GitHub release
         env:

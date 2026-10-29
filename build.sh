@@ -23,6 +23,18 @@ APP_NAME="UsageMeter"
 BUNDLE_ID="com.erichermanson.usagemeter"
 CONFIG="release"
 ENTITLEMENTS="UsageMeter.entitlements"
+COMPANION_CLOUD_ENABLED=false
+# Restricted CloudKit entitlements need a Developer ID provisioning profile.
+# Keep ordinary/ad-hoc builds usable without constructing an unentitled container.
+if [ -n "${COMPANION_PROVISIONING_PROFILE:-}" ]; then
+    if [ ! -f "${COMPANION_PROVISIONING_PROFILE}" ] || [ "${CODESIGN_IDENTITY:--}" = "-" ]; then
+        echo "CloudKit requires an existing profile and CODESIGN_IDENTITY." >&2
+        exit 1
+    fi
+    ENTITLEMENTS="UsageMeter-Cloud.entitlements"
+    COMPANION_CLOUD_ENABLED=true
+    python3 scripts/validate-companion-profile.py "${COMPANION_PROVISIONING_PROFILE}"
+fi
 
 # --- Version -----------------------------------------------------------------
 VERSION="${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)}"
@@ -53,6 +65,9 @@ ICON_FILE="Sources/UsageMeter/Resources/UsageMeter.icns"
 echo "==> Assembling ${APP_DIR} ..."
 rm -rf "${APP_DIR}"
 mkdir -p "${MACOS_DIR}" "${RES_DIR}"
+if [ "${COMPANION_CLOUD_ENABLED}" = true ]; then
+    cp "${COMPANION_PROVISIONING_PROFILE}" "${APP_DIR}/Contents/embedded.provisionprofile"
+fi
 cp "${BIN_PATH}" "${MACOS_DIR}/${APP_NAME}"
 
 if [ -f "${ICON_FILE}" ]; then
@@ -97,6 +112,7 @@ cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key>         <string>${BUILD_NUMBER}</string>
     <key>LSMinimumSystemVersion</key>  <string>14.0</string>
     <key>LSUIElement</key>             <true/>
+    <key>CompanionCloudEnabled</key>    <${COMPANION_CLOUD_ENABLED}/>
     <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Eric Hermanson. MIT License.</string>
 </dict>
 </plist>
@@ -112,11 +128,12 @@ else
     # Sign inner Mach-O first (helper native modules, nested code), then the app,
     # all with the hardened runtime that notarization requires.
     SIGN_ARGS=(--force --options runtime --timestamp --sign "${IDENTITY}")
-    [ -f "${ENTITLEMENTS}" ] && SIGN_ARGS+=(--entitlements "${ENTITLEMENTS}")
     # Native node addons, if any, must be signed individually.
     while IFS= read -r -d '' macho; do
         codesign "${SIGN_ARGS[@]}" "${macho}"
     done < <(find "${HELPER_DEST}" -name '*.node' -type f -print0)
+    # Restricted CloudKit capabilities belong to the app, not native addons.
+    [ -f "${ENTITLEMENTS}" ] && SIGN_ARGS+=(--entitlements "${ENTITLEMENTS}")
     codesign "${SIGN_ARGS[@]}" "${APP_DIR}"
     echo "==> Verifying signature..."
     codesign --verify --deep --strict --verbose=2 "${APP_DIR}"

@@ -77,7 +77,9 @@ enum BrandLogo {
                 return bundle
             }
         }
-        return nil
+        // The Xcode Mac target copies marks directly into its resources.
+        return Bundle.main.url(forResource: "claude-logo", withExtension: "png") != nil
+            ? Bundle.main : nil
     }()
 }
 

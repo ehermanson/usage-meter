@@ -67,6 +67,24 @@ until you install or sign in.
 
 ## Develop
 
+An iOS companion and Home Screen widgets can display limits collected by the Mac
+through private iCloud sync. In the menu-bar app, choose **Connect iPhone**, enable
+sync, and scan its code in the phone app. Both devices need the same Apple Account.
+Fresh readings require an awake Mac; widgets and background sync update when iOS
+allows. The companion syncs Limits plus Tokens and API-equivalent Cost summaries.
+
+The shared Xcode project is generated with XcodeGen:
+
+```sh
+brew install xcodegen
+xcodegen generate --spec iOS/project.yml
+open iOS/UsageMeterCompanion.xcodeproj
+```
+
+Use the `UsageMeterMac` and `UsageMeterCompanion` schemes for signed development
+builds with CloudKit. See [companion development and release setup](docs/ios-companion-setup.md)
+for signing, schema deployment, device testing, and the existing DMG build pipeline.
+
 ```sh
 swift test                 # run the unit tests
 ./build.sh                 # build build/UsageMeter.app (self-contained)

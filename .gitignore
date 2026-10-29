@@ -25,3 +25,8 @@ npm-debug.log*
 *.swp
 *~
 .idea/
+
+# Private signing assets
+*.mobileprovision
+*.provisionprofile
+*.p12

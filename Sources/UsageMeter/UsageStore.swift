@@ -1,3 +1,4 @@
+import AppKit
 import Observation
 import SwiftUI
 
@@ -250,6 +251,7 @@ final class UsageStore {
     }
 
     private var timer: Timer?
+    private var wakeObserver: NSObjectProtocol?
 
     /// The in-flight refresh, so concurrent callers coalesce instead of being
     /// dropped. `refreshToken` guards the teardown against interleaved tasks.
@@ -470,8 +472,16 @@ final class UsageStore {
     func startAutoRefresh(interval: TimeInterval = 60) {
         Task { await refresh() }
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { await self?.refresh() }
+        }
+        if let timer { RunLoop.main.add(timer, forMode: .common) }
+        if wakeObserver == nil {
+            wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in await self?.refresh() }
+            }
         }
     }
 
@@ -582,6 +592,10 @@ final class UsageStore {
         providers = resolved
         lastUpdated = .now
         persistLastGood()
+        CompanionPublisher.shared.submit(resolved)
+        if CompanionPublisher.shared.enabled {
+            Task { await ActivityStore.shared.refresh() }
+        }
     }
 
     /// How long a cached snapshot stays worth showing after a failed refresh.

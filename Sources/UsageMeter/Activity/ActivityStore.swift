@@ -1,3 +1,4 @@
+import CompanionKit
 import Foundation
 import Observation
 
@@ -26,6 +27,7 @@ final class ActivityStore {
     /// Nil until the first scan completes.
     private(set) var summary: ActivitySummary?
     private(set) var lastScanned: Date?
+    private(set) var companionActivity: CompanionActivity?
 
     /// No scan yet, or the last is over a minute old. The logs only grow
     /// while a tool is in use, so this is about noticing new work on the
@@ -132,6 +134,7 @@ final class ActivityStore {
         scanned = fresh
         lastScanned = .now
         reaggregate()
+        await exportCompanionActivity()
         refreshPricesIfDue()
     }
 
@@ -163,6 +166,43 @@ final class ActivityStore {
             guard let fresh else { return }
             pricing = fresh
             reaggregate()
+            await exportCompanionActivity()
         }
+    }
+
+    private func exportCompanionActivity() async {
+        guard CompanionPublisher.shared.enabled, let scanned, let capturedAt = lastScanned else {
+            return
+        }
+        let pricing = pricing ?? .bundled
+        let calendar = Calendar.current
+        let pricingUpdatedAt: Date?
+        switch pricing.source {
+        case .bundled: pricingUpdatedAt = nil
+        case .downloaded(let date): pricingUpdatedAt = date
+        }
+        let activity = await Task.detached(priority: .utility) {
+            CompanionActivity(
+                capturedAt: capturedAt, timeZoneIdentifier: calendar.timeZone.identifier,
+                ranges: ActivityRange.allCases.map { range in
+                    let summary = ActivityAggregator.summarize(
+                        deduped: scanned.records, range: range, now: capturedAt,
+                        calendar: calendar, pricing: pricing, detected: scanned.detected)
+                    return CompanionActivityRange(
+                        range: CompanionRange(rawValue: range.rawValue)!,
+                        bucketStarts: summary.bucketStarts,
+                        providers: summary.providers.map { provider in
+                            CompanionProviderActivity(
+                                name: provider.name, tokens: provider.tokens, cost: provider.cost,
+                                unpricedTokens: provider.unpricedTokens,
+                                sessions: provider.sessions,
+                                bucketTokens: provider.bucketTokens, bucketCost: provider.bucketCost
+                            )
+                        })
+                }, pricingUpdatedAt: pricingUpdatedAt)
+        }.value
+        guard CompanionPublisher.shared.enabled, lastScanned == capturedAt else { return }
+        companionActivity = activity
+        CompanionPublisher.shared.submit(UsageStore.shared.providers)
     }
 }

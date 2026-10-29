@@ -1,5 +1,16 @@
 import Foundation
 
+if CommandLine.arguments.contains("--companion-sync-check") {
+    let sem = DispatchSemaphore(value: 0)
+    Task.detached {
+        let result = await CompanionSyncCheck.run(
+            holdForPhone: CommandLine.arguments.contains("--hold-for-phone"))
+        // Exiting here avoids needing the main run loop for this headless check.
+        exit(result)
+    }
+    sem.wait()
+}
+
 // `UsageMeter --selftest` fetches both providers from the terminal and prints the
 // result, so the data path can be validated without the menu-bar UI.
 if CommandLine.arguments.contains("--selftest") {
