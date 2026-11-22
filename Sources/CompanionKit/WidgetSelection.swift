@@ -3,7 +3,7 @@ import Foundation
 /// Controls are scoped by the widget's saved configuration, not by the app's
 /// provider or tab. Differently configured widgets in a stack stay independent.
 public enum CompanionWidgetSelection {
-    private static let providers: Set<String> = ["tightest", "claude", "codex", "gemini"]
+    private static let providers: Set<String> = ["tightest", "claude", "codex", "antigravity"]
     private static let metrics: Set<String> = ["tokens", "cost"]
     private static let ranges: Set<String> = ["day", "week", "month", "quarter"]
 

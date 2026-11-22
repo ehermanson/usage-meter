@@ -128,5 +128,34 @@ extension PricingTable {
                         input: 6e-06, output: 2.25e-05, cacheRead: 6e-07, cacheWrite: 7.5e-06,
                         cacheWrite1h: 1.2e-05))
             ]),
+        "claude-sonnet-5-5": ModelPricing(
+            base: .init(
+                input: 2e-06, output: 1e-05, cacheRead: 1e-07, cacheWrite: 2.5e-06,
+                cacheWrite1h: 4e-06)),
+        "gpt-oss-120b": ModelPricing(
+            base: .init(input: 1.5e-07, output: 6e-07, cacheRead: 7.5e-08)),
+        "gemini/gemini-4-neon": ModelPricing(
+            base: .init(input: 3e-06, output: 1.5e-05, cacheRead: 1.5e-07)),
+        "gemini/gemini-4-argon": ModelPricing(
+            base: .init(input: 2e-06, output: 1e-05, cacheRead: 1e-07)),
+        "gemini/gemini-4-carbon": ModelPricing(
+            base: .init(input: 2e-06, output: 1e-05, cacheRead: 1e-07)),
+        "gemini/gemini-4-hydrogen": ModelPricing(
+            base: .init(input: 1.5e-06, output: 7.5e-06, cacheRead: 7.5e-08)),
+        "gemini/gemini-3.8-flash": ModelPricing(
+            base: .init(input: 7.5e-07, output: 3.75e-06, cacheRead: 7.5e-08)),
+        "gemini/gemini-3.7-flash": ModelPricing(
+            base: .init(input: 7.5e-07, output: 3.75e-06, cacheRead: 7.5e-08)),
+        "gemini/gemini-3.5-flash": ModelPricing(
+            base: .init(input: 1.5e-06, output: 9e-06, cacheRead: 1.5e-07)),
+        "gemini/gemini-2.5-pro": ModelPricing(
+            base: .init(input: 1.25e-06, output: 1e-05, cacheRead: 1.25e-07),
+            tiers: [
+                .init(
+                    threshold: 200000,
+                    rates: .init(input: 2.5e-06, output: 1.5e-05, cacheRead: 2.5e-07))
+            ]),
+        "gemini/gemini-2.5-flash": ModelPricing(
+            base: .init(input: 3e-07, output: 2.5e-06, cacheRead: 3e-08)),
     ]
 }

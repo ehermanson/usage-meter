@@ -40,11 +40,9 @@ protocol UsageProvider: Sendable {
     /// Hard cap on a single `fetch()`. Past this the store stops waiting and
     /// treats the provider as a retryable failure.
     ///
-    /// Every provider already bounds its own subprocess or HTTP call, but those
-    /// aren't the only ways a fetch can block: reading a sign-in tool's Keychain
-    /// item puts up an authorization prompt, and `SecItemCopyMatching` simply
-    /// waits — forever, if nobody answers it. This is the backstop for anything
-    /// the individual clients don't (or can't) time out themselves.
+    /// Every provider already bounds its own subprocess or HTTP call, so this is
+    /// the backstop for anything an individual client doesn't (or can't) time
+    /// out itself.
     var fetchTimeout: TimeInterval { get }
     func fetch() async -> ProviderUsage
 }
@@ -84,13 +82,13 @@ struct CodexProvider: UsageProvider {
     func fetch() async -> ProviderUsage { await CodexClient.fetch() }
 }
 
-/// Gemini — fetched from the Code Assist backend using the Antigravity CLI's
-/// stored OAuth credentials. Hits Google over HTTPS (and may refresh a token),
-/// so probe at a calm cadence with a back-off on failures.
-struct GeminiProvider: UsageProvider {
-    let name = "Gemini"
+/// Antigravity — driven by `agy -p "/usage" --output-format json`, reusing the
+/// CLI's own sign-in without touching the macOS Keychain. Hits Google over
+/// HTTPS, so probe at a calm cadence with a back-off on failures.
+struct AntigravityProvider: UsageProvider {
+    let name = "Antigravity"
     let accent = Color.blue
     let logoResource: String? = "gemini-logo"
     let throttle = ThrottlePolicy(successInterval: 180, backoffBase: 120, backoffMax: 600)
-    func fetch() async -> ProviderUsage { await GeminiClient.fetch() }
+    func fetch() async -> ProviderUsage { await AntigravityClient.fetch() }
 }

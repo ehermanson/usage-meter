@@ -37,7 +37,10 @@ enum ActivitySources {
     /// if not yet written — the logs as they stood then. The CLI's `--now`
     /// uses it so a run can be repeated exactly while the logs keep growing.
     static func all(until cutoff: Date?) -> [any ActivityLogSource] {
-        [ClaudeLogSource(until: cutoff), CodexLogSource(until: cutoff)]
+        [
+            ClaudeLogSource(until: cutoff), CodexLogSource(until: cutoff),
+            AntigravityLogSource(until: cutoff),
+        ]
     }
 
     /// Recursively lists `*.jsonl` under each directory that exists.
@@ -198,6 +201,124 @@ struct CodexLogSource: ActivityLogSource {
     static func sessionId(forFile file: URL) -> String {
         let stem = file.deletingPathExtension().lastPathComponent
         return stem.count >= 36 ? String(stem.suffix(36)) : stem
+    }
+}
+
+/// Antigravity CLI (`agy`): `<home>/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl`.
+///
+/// Matches Relay's home precedence (`ANTIGRAVITY_DIR` > `GEMINI_HOME` > `~/.gemini`).
+/// Walks immediate conversation folders under `brain/` directly because
+/// `.system_generated` is a dotfolder skipped by `ActivitySources.jsonlFiles`.
+/// Subagent conversations (named by `<parent>/.system_generated/subagents/<child>.json`)
+/// roll up to their root parent's session id so a delegated run counts as one session.
+final class AntigravityLogSource: ActivityLogSource, @unchecked Sendable {
+    let name = "Antigravity"
+    /// Lines stamped after this are ignored; see `ActivitySources.all(until:)`.
+    let until: Date?
+    /// Every model reply in `transcript_full.jsonl` carries `"type":"PLANNER_RESPONSE"`.
+    let markers = ["\"PLANNER_RESPONSE\""]
+
+    private let brainOverride: URL?
+    private let lock = NSLock()
+    /// Child conversation id → root parent conversation id, refreshed on each `logFiles()`.
+    private var parentByChild: [String: String] = [:]
+
+    init(brainDir: URL? = nil, until: Date? = nil) {
+        self.brainOverride = brainDir
+        self.until = until
+    }
+
+    static func home(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        home: String = NSHomeDirectory()
+    ) -> URL {
+        for key in ["ANTIGRAVITY_DIR", "GEMINI_HOME"] {
+            if let dir = environment[key]?.trimmingCharacters(in: .whitespaces), !dir.isEmpty {
+                return ActivitySources.resolved(dir)
+            }
+        }
+        return ActivitySources.resolved("\(home)/.gemini")
+    }
+
+    static func brainDir(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        home: String = NSHomeDirectory()
+    ) -> URL {
+        Self.home(environment: environment, home: home)
+            .appendingPathComponent("antigravity-cli/brain")
+    }
+
+    func logFiles() -> [URL] {
+        let brain = ActivitySources.resolved(brainOverride ?? Self.brainDir())
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: brain.path, isDirectory: &isDir), isDir.boolValue,
+            let children = try? fm.contentsOfDirectory(
+                at: brain, includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles])
+        else { return [] }
+
+        var files: [URL] = []
+        var directParent: [String: String] = [:]
+        for dir in children {
+            var childIsDir: ObjCBool = false
+            guard fm.fileExists(atPath: dir.path, isDirectory: &childIsDir), childIsDir.boolValue
+            else { continue }
+            let conversationId = dir.lastPathComponent
+            let sysDir = dir.appendingPathComponent(".system_generated")
+            let transcript = sysDir.appendingPathComponent("logs/transcript_full.jsonl")
+            if fm.fileExists(atPath: transcript.path) {
+                files.append(transcript)
+            }
+            let subagentsDir = sysDir.appendingPathComponent("subagents")
+            if let entries = try? fm.contentsOfDirectory(atPath: subagentsDir.path) {
+                for entry in entries where entry.hasSuffix(".json") {
+                    let childId = String(entry.dropLast(5))
+                    if !childId.isEmpty, childId != conversationId {
+                        directParent[childId] = conversationId
+                    }
+                }
+            }
+        }
+
+        // Collapse nested subagent chains to the root conversation, guarding against cycles.
+        var roots: [String: String] = [:]
+        for child in directParent.keys {
+            var current = child
+            var visited: Set<String> = [current]
+            while let parent = directParent[current], visited.insert(parent).inserted {
+                current = parent
+            }
+            if current != child { roots[child] = current }
+        }
+        lock.lock()
+        parentByChild = roots
+        lock.unlock()
+        return files
+    }
+
+    func makeParser(for file: URL) -> ActivityLogParser {
+        let conversationId = Self.conversationId(forFile: file)
+        return AntigravityLogParser(
+            conversationId: conversationId,
+            sessionResolver: { [weak self] in
+                guard let self else { return conversationId }
+                self.lock.lock()
+                defer { self.lock.unlock() }
+                return self.parentByChild[conversationId] ?? conversationId
+            },
+            until: until)
+    }
+
+    /// Conversation id from `…/brain/<id>/.system_generated/logs/transcript_full.jsonl`.
+    static func conversationId(forFile file: URL) -> String {
+        // logs -> .system_generated -> <id>
+        let logs = file.deletingLastPathComponent()
+        let sys = logs.deletingLastPathComponent()
+        if logs.lastPathComponent == "logs", sys.lastPathComponent == ".system_generated" {
+            return sys.deletingLastPathComponent().lastPathComponent
+        }
+        return file.deletingPathExtension().lastPathComponent
     }
 }
 

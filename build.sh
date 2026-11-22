@@ -1,12 +1,12 @@
 #!/bin/bash
-# Builds UsageMeter.app — a menu-bar app showing Claude, Codex & Gemini usage.
+# Builds UsageMeter.app — a menu-bar app showing Claude, Codex & Antigravity usage.
 #
 # The resulting .app bundles the Claude Node helper and its node_modules inside
 # Contents/Resources/helpers, so it keeps working when moved or installed to
 # /Applications. It does not bundle Claude Code's native binary (the SDK's
 # platform package, hundreds of MB); the helper reuses the user's existing
 # Claude Code install at runtime. The bundle needs Node.js, Claude Code, the
-# codex CLI, and the relevant sign-ins present on the machine to read usage.
+# codex CLI, the agy CLI, and the relevant sign-ins present on the machine to read usage.
 #
 # Signing:
 #   - default: ad-hoc (`-`), fine for running locally;

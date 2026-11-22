@@ -43,25 +43,33 @@ struct ModelPricingTests {
     @Test("every model the spec names is in the bundled fallback")
     func bundledCoverage() {
         let ids = [
-            "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5", "claude-opus-5",
-            "claude-opus-4-8", "claude-fable-5", "claude-opus-4-7", "claude-haiku-4-5-20251001",
-            "claude-opus-5-5[1m]", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5",
+            "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-sonnet-5",
+            "claude-opus-5", "claude-opus-4-8", "claude-fable-5", "claude-opus-4-7",
+            "claude-haiku-4-5-20251001", "claude-opus-5-5[1m]", "claude-opus-4-6",
+            "claude-sonnet-4-6", "claude-haiku-4-5",
             "gpt-6-astra", "gpt-5.6-sol", "gpt-5.5", "gpt-6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
-            "gpt-5", "gpt-5-codex", "gpt-5.1-codex",
+            "gpt-5", "gpt-5-codex", "gpt-5.1-codex", "gpt-oss-120b-medium",
+            "gemini-4-neon-high", "gemini-4-neon-xhigh", "gemini-4-argon-medium",
+            "gemini-4-hydrogen-low", "gemini-3.8-flash-high", "gemini-2.5-pro",
         ]
         for id in ids { #expect(table.pricing(for: id) != nil, "\(id)") }
     }
 
-    @Test("lookup: exact, then without [1m], then without a date, then provider-prefixed")
+    @Test("lookup: exact, then without [1m], date, or effort suffix, then provider-prefixed")
     func lookupNormalization() {
         #expect(
             PricingTable.lookupKeys(for: "Claude-Opus-5-5[1m]") == [
                 "claude-opus-5-5[1m]", "claude-opus-5-5",
                 "anthropic/claude-opus-5-5[1m]", "anthropic/claude-opus-5-5",
                 "openai/claude-opus-5-5[1m]", "openai/claude-opus-5-5",
+                "gemini/claude-opus-5-5[1m]", "gemini/claude-opus-5-5",
             ])
         #expect(PricingTable.lookupKeys(for: "claude-haiku-4-5-20251001")[1] == "claude-haiku-4-5")
         #expect(PricingTable.lookupKeys(for: "gpt-5.4-2026-03-05")[1] == "gpt-5.4")
+        #expect(PricingTable.lookupKeys(for: "gemini-4-neon-high").contains("gemini/gemini-4-neon"))
+        #expect(
+            PricingTable.lookupKeys(for: "gemini-4-neon-xhigh").contains("gemini/gemini-4-neon"))
+        #expect(PricingTable.lookupKeys(for: "claude-opus-5-5-high").contains("claude-opus-5-5"))
 
         let a = ModelPricing(base: .init(input: 1, output: 1))
         let b = ModelPricing(base: .init(input: 2, output: 2))
@@ -142,13 +150,14 @@ struct ModelPricingTests {
                 "supports_vision": true, "max_tokens": 8192
               },
               "openai/model-b": {"input_cost_per_token": 1, "output_cost_per_token": 2},
+              "gemini/model-g": {"input_cost_per_token": 3, "output_cost_per_token": 4},
               "bedrock/us/model-c": {"input_cost_per_token": 1, "output_cost_per_token": 2},
               "vertex_ai/model-d": {"input_cost_per_token": 1, "output_cost_per_token": 2},
               "image-model": {"input_cost_per_image": 0.04}
             }
             """
         let table = try #require(PricingTable.parseLiteLLM(Data(json.utf8), source: .bundled))
-        #expect(Set(table.models.keys) == ["model-a", "openai/model-b"])
+        #expect(Set(table.models.keys) == ["model-a", "openai/model-b", "gemini/model-g"])
         let a = try #require(table.models["model-a"])
         #expect(
             a.base

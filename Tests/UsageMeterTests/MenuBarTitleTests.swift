@@ -308,4 +308,23 @@ struct MenuBarTitleTests {
             #expect(display.segments.first == MenuBarSegment(text: "5h", style: .label))
         }
     }
+
+    @MainActor
+    @Test("saved Gemini pin migrates to Antigravity; unknown pins clear to Auto")
+    func pinnedProviderMigration() {
+        let domain = "MenuBarTitleTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: domain)!
+        defer { defaults.removePersistentDomain(forName: domain) }
+
+        defaults.set("Gemini", forKey: "pinnedProvider")
+        #expect(UsageStore.loadPinnedProvider(defaults: defaults) == "Antigravity")
+        #expect(defaults.string(forKey: "pinnedProvider") == "Antigravity")
+
+        defaults.set("RemovedProvider", forKey: "pinnedProvider")
+        #expect(UsageStore.loadPinnedProvider(defaults: defaults) == nil)
+        #expect(defaults.string(forKey: "pinnedProvider") == nil)
+
+        defaults.set("Claude", forKey: "pinnedProvider")
+        #expect(UsageStore.loadPinnedProvider(defaults: defaults) == "Claude")
+    }
 }

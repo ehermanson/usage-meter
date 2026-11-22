@@ -66,7 +66,7 @@ enum ActivityCLI {
                 + "  unpriced \(fixed(summary.unpricedTokenShare * 100, 3))%")
         for p in summary.providers {
             print(
-                "\(pad(p.name, 7)) tokens \(p.tokens) (\(Format.tokens(p.tokens)))"
+                "\(pad(p.name, 11)) tokens \(p.tokens) (\(Format.tokens(p.tokens)))"
                     + "  cost \(fixed(p.cost)) (\(Format.cost(p.cost)))"
                     + "  sessions \(p.sessions)  unpriced_tokens \(p.unpricedTokens)")
         }
@@ -89,7 +89,7 @@ enum ActivityCLI {
         for (key, entry) in byModel.sorted(by: { $0.value.tokens.total > $1.value.tokens.total }) {
             let cost = costs[key].map { fixed($0) } ?? "unpriced"
             print(
-                "  \(pad(entry.provider, 6)) \(pad(entry.model, 28)) total \(entry.tokens.total)"
+                "  \(pad(entry.provider, 11)) \(pad(entry.model, 28)) total \(entry.tokens.total)"
                     + "  in \(entry.tokens.input)  out \(entry.tokens.output)"
                     + "  cache_read \(entry.tokens.cacheRead)"
                     + "  cache_write \(entry.tokens.cacheWrite) (1h \(entry.long))  cost \(cost)")

@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/github/license/ehermanson/usage-meter)](LICENSE)
 
 A tiny macOS menu-bar app showing how much of your **Claude**, **Codex**, and
-**Gemini** usage you've burned, at a glance.
+**Antigravity** usage you've burned, at a glance.
 
 **[usage-meter.eric-r-hermanson.workers.dev](https://usage-meter.eric-r-hermanson.workers.dev/)** ·
 [**Download**](https://github.com/ehermanson/usage-meter/releases/latest)
@@ -16,7 +16,7 @@ A tiny macOS menu-bar app showing how much of your **Claude**, **Codex**, and
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/demo-light.png">
-    <img alt="Usage Meter menu-bar dropdown on its Limits tab, showing Claude, Codex, and Gemini usage" src="docs/demo-light.png" width="620">
+    <img alt="Usage Meter menu-bar dropdown on its Limits tab, showing Claude, Codex, and Antigravity usage" src="docs/demo-light.png" width="620">
   </picture>
 </p>
 
@@ -36,11 +36,11 @@ you're ahead, it says how long until you'd hit the limit. Also there: **Show
 remaining**, and **Launch at Login**.
 
 Two more tabs look back rather than at the limits. **Tokens** and **Cost** add
-up what Claude Code and Codex processed over the last 24 hours or 7, 30, or 90
-days, charted with a line for each provider. The figures come from the session
-logs both tools already keep on your Mac, and the logs never leave it. Cost is
-an API-equivalent estimate at list prices (from LiteLLM's public price table),
-not a bill.
+up what Claude Code, Codex, and the Antigravity CLI (`agy`) processed over the
+last 24 hours or 7, 30, or 90 days, charted with a line for each provider. The
+figures come from the session logs those tools already keep on your Mac, and the
+logs never leave it. Cost is an API-equivalent estimate at list prices (from
+LiteLLM's public price table), not a bill.
 
 <p align="center">
   <picture>
@@ -61,9 +61,9 @@ relaunches in place with one click.
 
 It reads usage from tools you already have: [Node.js](https://nodejs.org) and
 [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) (Claude), the
-[Codex CLI](https://github.com/openai/codex), and a Gemini sign-in (Antigravity
-or the Gemini CLI). Any provider that isn't set up shows a **Set up ↗** hint
-until you install or sign in.
+[Codex CLI](https://github.com/openai/codex), and the
+[Antigravity CLI](https://antigravity.google/cli) (`agy`). Any provider that
+isn't set up shows a **Set up ↗** hint until you install or sign in.
 
 ## Develop
 

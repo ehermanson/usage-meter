@@ -20,6 +20,12 @@ final class WidgetSelectionTests: XCTestCase {
                 scope: "limits.tightest", fallback: "tightest", defaults: defaults), "tightest")
         XCTAssertTrue(
             CompanionWidgetSelection.set(
+                scope: "limits.tightest", value: "antigravity", defaults: defaults))
+        XCTAssertEqual(
+            CompanionWidgetSelection.value(
+                scope: "limits.tightest", fallback: "tightest", defaults: defaults), "antigravity")
+        XCTAssertTrue(
+            CompanionWidgetSelection.set(
                 scope: "activity.tokens.week", value: "cost", defaults: defaults))
         XCTAssertEqual(
             CompanionWidgetSelection.value(

@@ -146,7 +146,7 @@ struct TokenCounts: Equatable, Hashable, Sendable {
 /// a quarter of history is on the order of 100k of these — and holds no raw
 /// line content.
 struct UsageRecord: Equatable, Sendable {
-    /// Matches `UsageStore`'s provider names: "Claude", "Codex".
+    /// Matches `UsageStore`'s provider names: "Claude", "Codex", "Antigravity".
     let provider: String
     let timestamp: Date
     /// As logged ("claude-opus-5-5[1m]"); normalized only at price lookup.

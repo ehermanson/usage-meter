@@ -78,7 +78,7 @@ struct ModelTests {
     func detectionFlag() {
         #expect(ProviderUsage.ok("Claude", pools: []).detected)
         #expect(ProviderUsage.failed("Codex", "boom").detected)
-        #expect(ProviderUsage.needsSetup("Gemini", "sign in").detected)
+        #expect(ProviderUsage.needsSetup("Antigravity", "sign in").detected)
 
         let absent = ProviderUsage.notDetected("Codex")
         #expect(!absent.detected)

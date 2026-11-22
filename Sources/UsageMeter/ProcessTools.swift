@@ -39,6 +39,7 @@ enum ProcessTools {
                 proc.environment = env
 
                 let outPipe = Pipe(), errPipe = Pipe()
+                proc.standardInput = FileHandle.nullDevice
                 proc.standardOutput = outPipe
                 proc.standardError = errPipe
 
@@ -114,6 +115,17 @@ enum ProcessTools {
                 "/opt/homebrew/bin/claude",
                 "/usr/local/bin/claude",
                 "\(NSHomeDirectory())/.claude/local/claude",
+            ])
+    }
+
+    /// Locate Google's Antigravity CLI (`agy`).
+    static func findAntigravity() -> String? {
+        findExecutable(
+            "agy",
+            candidates: [
+                "\(NSHomeDirectory())/.local/bin/agy",
+                "/opt/homebrew/bin/agy",
+                "/usr/local/bin/agy",
             ])
     }
 

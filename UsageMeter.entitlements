@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <!--
-      The app is NOT sandboxed: it must spawn external CLIs (node, codex) and read
-      another tool's Keychain item (Gemini). Sandboxing would forbid both, so this
-      ships as a Developer ID (direct-download) build rather than a Mac App Store one.
+      The app is NOT sandboxed: it must spawn external CLIs (node, codex, agy) and
+      read local session logs. Sandboxing would forbid both, so this ships as a
+      Developer ID (direct-download) build rather than a Mac App Store one.
 
       Hardened runtime (required for notarization) is applied at sign time by
       codesign. Library validation is disabled so the bundled Node helper can load

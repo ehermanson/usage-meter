@@ -17,8 +17,27 @@ final class UsageStore {
     var visibleProviders: [ProviderUsage] { providers.filter { $0.detected } }
 
     /// Which provider is pinned to the menu-bar title; nil = Auto (highest 5h).
-    var pinnedProvider: String? = UserDefaults.standard.string(forKey: "pinnedProvider") {
+    var pinnedProvider: String? = UsageStore.loadPinnedProvider() {
         didSet { UserDefaults.standard.set(pinnedProvider, forKey: "pinnedProvider") }
+    }
+
+    /// Migrates a legacy "Gemini" pin to "Antigravity" and clears any saved pin
+    /// whose provider is no longer in the registry, so the picker never displays
+    /// a stale provider name with nothing checked.
+    static func loadPinnedProvider(
+        defaults: UserDefaults = .standard,
+        knownProviders: Set<String> = ["Claude", "Codex", "Antigravity"]
+    ) -> String? {
+        guard let saved = defaults.string(forKey: "pinnedProvider") else { return nil }
+        let resolved = saved == "Gemini" ? "Antigravity" : saved
+        guard knownProviders.contains(resolved) else {
+            defaults.removeObject(forKey: "pinnedProvider")
+            return nil
+        }
+        if resolved != saved {
+            defaults.set(resolved, forKey: "pinnedProvider")
+        }
+        return resolved
     }
 
     /// How much the menu-bar item spells out, from both windows down to a bare
@@ -111,7 +130,9 @@ final class UsageStore {
     /// The providers polled each pass, in display order. Add one here to surface a
     /// new source — the fetch loop, throttling, last-good caching, and section
     /// styling are all keyed off this list, so nothing else needs to change.
-    private let registry: [UsageProvider] = [ClaudeProvider(), CodexProvider(), GeminiProvider()]
+    private let registry: [UsageProvider] = [
+        ClaudeProvider(), CodexProvider(), AntigravityProvider(),
+    ]
 
     /// Per-provider bookkeeping, keyed by name so it scales with the registry
     /// instead of a field apiece. `failureStreak` drives the throttle back-off;
@@ -145,6 +166,9 @@ final class UsageStore {
     /// last week.
     private func loadLastGood() {
         let defaults = UserDefaults.standard
+        // Clean up keys left behind by the retired Gemini Code Assist client.
+        defaults.removeObject(forKey: PersistKey.lastGood("Gemini"))
+        defaults.removeObject(forKey: "geminiProject.v1")
         let decoder = JSONDecoder()
         let lastPass = defaults.object(forKey: PersistKey.updated) as? Date
         var seeded: [ProviderUsage] = []
@@ -393,7 +417,7 @@ final class UsageStore {
     }
 
     /// "Claude  5h 7% · Wk 31%". A provider with no 5h/weekly split shows its own
-    /// window label (e.g. "Gemini  Daily 12%"). With a single provider the name
+    /// window label (e.g. "Antigravity  Daily 12%"). With a single provider the name
     /// is dropped (e.g. "5h 7% · Wk 31%") — except for a fixed-budget plan's
     /// generic "Usage" window, which always carries the name ("Claude Usage 6%",
     /// or "Claude Usage 94% left").
@@ -447,7 +471,7 @@ final class UsageStore {
 
     /// What a style is called in the picker. `.full` is "5hr and weekly" only
     /// where there *is* a 5hr and a weekly to show; a fixed-budget Enterprise
-    /// plan's lone "Usage" window (or a Gemini-only "Daily") has neither, and
+    /// plan's lone "Usage" window (or a daily-only plan) has neither, and
     /// the same style is then just the number — "Percentage used". The
     /// used/left switch flips the word with it.
     func menuBarStyleLabel(_ style: MenuBarStyle) -> String {

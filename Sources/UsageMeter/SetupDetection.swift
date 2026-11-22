@@ -8,6 +8,7 @@ enum SetupDetection {
     static let nodeURL = "https://nodejs.org/en/download"
     static let claudeCodeURL = "https://docs.claude.com/en/docs/claude-code/setup"
     static let codexURL = "https://github.com/openai/codex"
+    static let antigravityURL = "https://antigravity.google/cli"
 
     /// Phrases that mean "the CLI/runtime isn't installed or couldn't be launched."
     private static let missingTool = [

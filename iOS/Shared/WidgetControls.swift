@@ -68,7 +68,7 @@ struct MeterProviderControls: View {
     let medium: Bool
     var visibleProvider: String? = nil
     private var choices: [String] {
-        names.map { $0.lowercased() }.filter { ["claude", "codex", "gemini"].contains($0) }
+        names.map { $0.lowercased() }.filter { ["claude", "codex", "antigravity"].contains($0) }
     }
     var body: some View {
         if medium {
@@ -101,7 +101,7 @@ struct MeterProviderControls: View {
         switch choice {
         case "claude": "Claude";
         case "codex": "Codex";
-        case "gemini": "Gemini";
+        case "antigravity": "Antigravity";
         default: choice
         }
     }

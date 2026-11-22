@@ -12,7 +12,7 @@ struct StaleValueTests {
 
     private func snapshot(agedBy age: TimeInterval?) -> ProviderUsage {
         var usage = ProviderUsage.ok(
-            "Gemini",
+            "Antigravity",
             pools: [
                 UsagePool(
                     title: nil, windows: [UsageWindow(label: "Daily", usedPercent: 0, resetAt: nil)]

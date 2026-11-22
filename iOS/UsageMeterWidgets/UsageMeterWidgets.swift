@@ -5,17 +5,18 @@ import SwiftUI
 import WidgetKit
 
 enum WidgetProviderChoice: String, AppEnum {
-    case tightest, claude, codex, gemini
+    case tightest, claude, codex, antigravity
     static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Provider")
     static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
-        .tightest: "Closest to limit", .claude: "Claude", .codex: "Codex", .gemini: "Gemini",
+        .tightest: "Closest to limit", .claude: "Claude", .codex: "Codex",
+        .antigravity: "Antigravity",
     ]
     var providerName: String? {
         switch self {
         case .tightest: nil
         case .claude: "Claude"
         case .codex: "Codex"
-        case .gemini: "Gemini"
+        case .antigravity: "Antigravity"
         }
     }
 }

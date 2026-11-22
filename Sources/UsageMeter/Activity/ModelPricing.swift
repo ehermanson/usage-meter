@@ -91,17 +91,21 @@ struct PricingTable: Sendable {
 
     /// Candidate keys, most specific first: the id as logged, without a
     /// bracketed suffix ("[1m]"), without a date suffix ("-20251001" or
-    /// "-2025-10-01"), then each of those under the provider prefixes
-    /// LiteLLM files some models under.
+    /// "-2025-10-01"), without a thinking-effort suffix ("-low", "-medium",
+    /// "-high", "-xhigh" — Antigravity logs variants like "gemini-4-neon-high"),
+    /// then each of those under the provider prefixes LiteLLM files some models
+    /// under.
     static func lookupKeys(for model: String) -> [String] {
         let exact = model.lowercased().trimmingCharacters(in: .whitespaces)
         let unbracketed = stripBracketSuffix(exact)
         let undated = stripDateSuffix(unbracketed)
+        let base = stripEffortSuffix(undated)
         var keys: [String] = []
-        for key in [exact, unbracketed, undated] where !keys.contains(key) {
+        for key in [exact, unbracketed, undated, base] where !keys.contains(key) {
             keys.append(key)
         }
-        return keys + ["anthropic/", "openai/"].flatMap { prefix in keys.map { prefix + $0 } }
+        return keys
+            + ["anthropic/", "openai/", "gemini/"].flatMap { prefix in keys.map { prefix + $0 } }
     }
 
     /// The id with any suffix a price can't depend on removed. Used to
@@ -160,12 +164,20 @@ struct PricingTable: Sendable {
         }
         return id
     }
+
+    private static func stripEffortSuffix(_ id: String) -> String {
+        for suffix in ["-xhigh", "-high", "-medium", "-low"] where id.hasSuffix(suffix) {
+            let trimmed = String(id.dropLast(suffix.count))
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return id
+    }
 }
 
 extension PricingTable {
     /// Reads LiteLLM's `model_prices_and_context_window.json`, keeping only
-    /// what a lookup can reach (bare ids and `anthropic/`/`openai/` ones —
-    /// not Bedrock, Vertex, or the other resellers' copies) and only the
+    /// what a lookup can reach (bare ids and `anthropic/`/`openai/`/`gemini/`
+    /// ones — not Bedrock, Vertex, or the other resellers' copies) and only the
     /// token-price fields. `_flex`/`_priority`/`_batches` variants are other
     /// service tiers than the interactive one these logs record, so they're
     /// skipped. Nil if the data isn't a table of that shape.
@@ -185,7 +197,9 @@ extension PricingTable {
     private static func isReachable(_ key: String) -> Bool {
         let slashes = key.filter { $0 == "/" }.count
         if slashes == 0 { return true }
-        return slashes == 1 && (key.hasPrefix("anthropic/") || key.hasPrefix("openai/"))
+        return slashes == 1
+            && (key.hasPrefix("anthropic/") || key.hasPrefix("openai/")
+                || key.hasPrefix("gemini/"))
     }
 
     private static let fields: [String: WritableKeyPath<ModelPricing.Rates, Double?>] = [

@@ -18,8 +18,8 @@ if CommandLine.arguments.contains("--selftest") {
     Task {
         let claude = await ClaudeClient.fetch()
         let codex = await CodexClient.fetch()
-        let gemini = await GeminiClient.fetch()
-        let all = [claude, codex, gemini]
+        let antigravity = await AntigravityClient.fetch()
+        let all = [claude, codex, antigravity]
         for p in all {
             let planSuffix = p.plan.map { " [\($0)]" } ?? ""
             print("\(p.name)\(planSuffix):")

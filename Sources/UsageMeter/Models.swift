@@ -52,7 +52,7 @@ struct ResetCredits: Equatable, Codable {
 /// Aggregated usage for a single provider.
 struct ProviderUsage: Identifiable, Equatable, Codable {
     var id: String { name }  // one section per provider
-    let name: String  // "Claude", "Codex"
+    let name: String  // "Claude", "Codex", "Antigravity"
     var pools: [UsagePool]
     var error: String? = nil
     var plan: String? = nil  // "Max", "Pro", "Pro Lite", …

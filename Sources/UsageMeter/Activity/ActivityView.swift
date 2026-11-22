@@ -263,8 +263,8 @@ struct ActivityView: View {
             Text("No session logs found")
                 .font(.system(size: 12, weight: .semibold))
             Text(
-                "Tokens and cost are read from the logs Claude Code and Codex keep on this Mac. "
-                    + "Neither has left one here yet."
+                "Tokens and cost are read from the logs Claude Code, Codex, and Antigravity keep on this Mac. "
+                    + "None has left one here yet."
             )
             .font(.system(size: 11))
             .foregroundStyle(.secondary)

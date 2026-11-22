@@ -110,7 +110,7 @@ struct MenuContentView: View {
             Text("No usage to show")
                 .font(.system(size: 12, weight: .semibold))
             Text(
-                "Usage Meter tracks your limits once Claude Code, Codex, or Gemini is set up on this Mac."
+                "Usage Meter tracks your limits once Claude Code, Codex, or Antigravity is set up on this Mac."
             )
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
