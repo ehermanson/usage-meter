@@ -10,6 +10,9 @@ struct MenuContentView: View {
     /// The view lives as long as the app, so the tab sticks across opens and
     /// is back on Limits after a relaunch.
     @State private var tab: UsageTab = UsageTab.launchArgument ?? .limits
+    /// Whether the inline Providers checkbox list under General is expanded.
+    @State private var showProviders = ProcessInfo.processInfo.arguments.contains(
+        "--expand-providers")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -62,6 +65,13 @@ struct MenuContentView: View {
             NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)
         ) { _ in
             launchAtLogin = LoginItem.isEnabled
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)
+        ) { _ in
+            // Collapse the inline checklist on close so the panel opens compact
+            // next time, unless every provider is off (keep the fix in reach).
+            if !store.visibleProviders.isEmpty { showProviders = false }
         }
         .onAppear { launchAtLogin = LoginItem.isEnabled }
         // Picking Tokens or Cost is remembered, so later opens warm the scan
@@ -172,7 +182,7 @@ struct MenuContentView: View {
                 }
 
                 if !store.manageableProviders.isEmpty {
-                    settingRow("Providers") { providersPicker }
+                    providersSection
                 }
 
                 // Only offered once Claude Code was detected — for setups where
@@ -273,28 +283,54 @@ struct MenuContentView: View {
         .help("How much the menu-bar item shows. The full numbers are always here in the dropdown.")
     }
 
-    /// Turns tracking on or off per detected provider across Limits, the menu
-    /// bar, Tokens/Cost, and iPhone sync. Disabled providers stay in the menu
-    /// (unchecked) so they can be re-enabled anytime.
-    private var providersPicker: some View {
-        Menu {
-            ForEach(store.manageableProviders, id: \.self) { name in
-                let enabled = store.isProviderEnabled(name)
-                Button {
-                    store.setProviderEnabled(name, !enabled)
-                } label: {
-                    pickerRow(name, checked: enabled)
+    /// Expandable inline checklist for turning detected providers on or off
+    /// across Limits, the menu bar, Tokens/Cost, and iPhone sync. Stays compact
+    /// until clicked, and stays open while toggling multiple providers.
+    private var providersSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    showProviders.toggle()
                 }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Providers")
+                        .font(.system(size: 11))
+                    Spacer(minLength: 0)
+                    HStack(spacing: 4) {
+                        Text(store.providersSummaryLabel)
+                        Image(systemName: showProviders ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 8.5, weight: .semibold))
+                            .accessibilityHidden(true)
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                }
+                .frame(minHeight: 16)
+                .contentShape(Rectangle())
             }
-        } label: {
-            Text(store.providersSummaryLabel)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .accessibilityValue(store.providersSummaryLabel)
+            .help("Choose which detected providers Usage Meter tracks.")
+
+            if showProviders {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(store.manageableProviders, id: \.self) { name in
+                        let style = store.style(for: name)
+                        ProviderCheckboxRow(
+                            name: name,
+                            accent: style.accent,
+                            logoResource: style.logoResource,
+                            isEnabled: store.isProviderEnabled(name)
+                        ) {
+                            store.setProviderEnabled(name, !store.isProviderEnabled(name))
+                        }
+                    }
+                }
+                .padding(.top, 2)
+                .padding(.leading, 2)
+            }
         }
-        .menuStyle(.borderlessButton)
-        .controlSize(.small)
-        .fixedSize()
-        .help("Choose which detected providers Usage Meter tracks.")
     }
 
     /// "Auto" resolves the Claude config dir the way the user's terminal would;
@@ -549,6 +585,65 @@ struct MenuContentView: View {
         if !LoginItem.setEnabled(enabled) {
             launchAtLogin = LoginItem.isEnabled  // revert on failure
         }
+    }
+}
+
+/// One checkbox row inside the expanded Providers checklist. Drawn in SwiftUI
+/// so the checkbox, brand mark, and label stay crisp and clickable across the
+/// full row width in the non-activating panel.
+private struct ProviderCheckboxRow: View {
+    let name: String
+    let accent: Color
+    let logoResource: String?
+    let isEnabled: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(spacing: 7) {
+                checkbox
+                if let logo = logoResource.flatMap(BrandLogo.image(named:)) {
+                    Image(nsImage: logo)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 11, height: 11)
+                        .foregroundStyle(isEnabled ? .primary : .tertiary)
+                        .accessibilityHidden(true)
+                } else {
+                    Circle()
+                        .fill(accent.opacity(isEnabled ? 1 : 0.35))
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                }
+                Text(name)
+                    .font(.system(size: 11))
+                    .foregroundStyle(isEnabled ? .primary : .secondary)
+                Spacer(minLength: 0)
+            }
+            .frame(minHeight: 16)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
+        .accessibilityValue(isEnabled ? "On" : "Off")
+    }
+
+    private var checkbox: some View {
+        let shape = RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+        return ZStack {
+            if isEnabled {
+                shape.fill(Color.accentColor)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .foregroundStyle(.white)
+            } else {
+                shape.fill(Color.primary.opacity(0.06))
+                shape.strokeBorder(Color.primary.opacity(0.28), lineWidth: 1)
+            }
+        }
+        .frame(width: 13, height: 13)
+        .accessibilityHidden(true)
     }
 }
 
