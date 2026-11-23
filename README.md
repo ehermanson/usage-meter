@@ -33,7 +33,8 @@ provider needs more than one. The dropdown always has the full numbers whichever
 style is set. Each window also shows whether you're ahead of pace, on pace, or
 have room to spare, with a marker on the bar where even usage would be; when
 you're ahead, it says how long until you'd hit the limit. Also there: **Show
-remaining**, and **Launch at Login**.
+remaining**, **Providers** (turn off any detected tool you don't want tracked),
+and **Launch at Login**.
 
 Two more tabs look back rather than at the limits. **Tokens** and **Cost** add
 up what Claude Code, Codex, and the Antigravity CLI (`agy`) processed over the

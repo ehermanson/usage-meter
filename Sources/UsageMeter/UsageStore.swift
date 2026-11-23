@@ -12,13 +12,94 @@ final class UsageStore {
     var lastUpdated: Date?
 
     /// The sections actually shown: providers whose CLI/credentials were found on
-    /// this machine. A tool the user doesn't have installed is hidden entirely —
-    /// using the app with a single provider is a fully supported state.
-    var visibleProviders: [ProviderUsage] { providers.filter { $0.detected } }
+    /// this machine and that haven't been turned off in Settings. A tool the user
+    /// doesn't have installed (or chose to ignore) is hidden entirely — using the
+    /// app with a single provider is a fully supported state.
+    var visibleProviders: [ProviderUsage] {
+        providers.filter { $0.detected && isProviderEnabled($0.name) }
+    }
+
+    /// Providers the user explicitly turned off in Settings. Disabled providers
+    /// are never polled, hidden from Limits, the menu bar, Tokens, Cost, and
+    /// iPhone sync, and can be re-enabled anytime from Settings.
+    var disabledProviders: Set<String> {
+        didSet {
+            defaults.set(disabledProviders.sorted(), forKey: Self.disabledProvidersKey)
+        }
+    }
+
+    static let disabledProvidersKey = "disabledProviders"
+
+    /// Loads persisted disabled provider names, keeping only known registry names.
+    static func loadDisabledProviders(
+        defaults: UserDefaults = .standard,
+        knownProviders: Set<String> = ["Claude", "Codex", "Antigravity"]
+    ) -> Set<String> {
+        let saved = defaults.stringArray(forKey: disabledProvidersKey) ?? []
+        let filtered = Set(saved.filter { knownProviders.contains($0) })
+        if filtered.count != saved.count {
+            defaults.set(filtered.sorted(), forKey: disabledProvidersKey)
+        }
+        return filtered
+    }
+
+    func isProviderEnabled(_ name: String) -> Bool {
+        !disabledProviders.contains(name)
+    }
+
+    /// Providers found on this Mac plus any the user turned off (so they stay
+    /// reachable in Settings even after a relaunch, when a disabled provider is
+    /// never probed). Ordered to match the registry.
+    var manageableProviders: [String] {
+        let currentDetected = Set(providers.filter(\.detected).map(\.name))
+        return registry.map(\.name).filter {
+            detectedProviders.contains($0) || currentDetected.contains($0)
+                || disabledProviders.contains($0)
+        }
+    }
+
+    /// Compact summary for the Settings "Providers" menu: "All", "None", or "2 of 3".
+    var providersSummaryLabel: String {
+        let list = manageableProviders
+        guard !list.isEmpty else { return "None" }
+        let enabledCount = list.filter { isProviderEnabled($0) }.count
+        if enabledCount == list.count { return "All" }
+        if enabledCount == 0 { return "None" }
+        return "\(enabledCount) of \(list.count)"
+    }
+
+    /// Turns tracking on or off for a provider across Limits, the menu bar,
+    /// Tokens/Cost, and iPhone sync.
+    func setProviderEnabled(_ name: String, _ enabled: Bool) {
+        if enabled {
+            guard disabledProviders.remove(name) != nil else { return }
+            states[name]?.lastAttempt = nil
+            states[name]?.failureStreak = 0
+            if publishSideEffects {
+                ActivityStore.shared.setDisabledProviders(disabledProviders)
+                Task { await refresh() }
+            }
+        } else {
+            guard disabledProviders.insert(name).inserted else { return }
+            if pinnedProvider == name { pinnedProvider = nil }
+            states[name]?.lastGood = nil
+            states[name]?.lastResolved = .notDetected(name)
+            states[name]?.lastFailureReason = nil
+            states[name]?.failureStreak = 0
+            if let index = providers.firstIndex(where: { $0.name == name }) {
+                providers[index] = .notDetected(name)
+            }
+            persistLastGood()
+            if publishSideEffects {
+                CompanionPublisher.shared.submit(providers)
+                ActivityStore.shared.setDisabledProviders(disabledProviders)
+            }
+        }
+    }
 
     /// Which provider is pinned to the menu-bar title; nil = Auto (highest 5h).
-    var pinnedProvider: String? = UsageStore.loadPinnedProvider() {
-        didSet { UserDefaults.standard.set(pinnedProvider, forKey: "pinnedProvider") }
+    var pinnedProvider: String? {
+        didSet { defaults.set(pinnedProvider, forKey: "pinnedProvider") }
     }
 
     /// Migrates a legacy "Gemini" pin to "Antigravity" and clears any saved pin
@@ -42,15 +123,14 @@ final class UsageStore {
 
     /// How much the menu-bar item spells out, from both windows down to a bare
     /// ring — and whether it tracks one provider or all of them.
-    var menuBarStyle: MenuBarStyle = UsageStore.loadMenuBarStyle() {
-        didSet { UserDefaults.standard.set(menuBarStyle.rawValue, forKey: "menuBarStyle") }
+    var menuBarStyle: MenuBarStyle {
+        didSet { defaults.set(menuBarStyle.rawValue, forKey: "menuBarStyle") }
     }
 
     /// Carries over the boolean "compact" preference this replaced: the two
     /// states it switched between are now two of four, so an existing `true`
     /// lands on `.compact` and anything else on `.full`.
-    private static func loadMenuBarStyle() -> MenuBarStyle {
-        let defaults = UserDefaults.standard
+    private static func loadMenuBarStyle(defaults: UserDefaults = .standard) -> MenuBarStyle {
         if let raw = defaults.string(forKey: "menuBarStyle"),
             let style = MenuBarStyle(rawValue: raw)
         {
@@ -151,13 +231,28 @@ final class UsageStore {
         var lastFailureReason: String?
     }
     private var states: [String: ProviderState] = [:]
+    /// Providers that have been detected on this Mac (from disk cache or a live
+    /// probe), so Settings knows which ones to offer even while one is disabled.
+    private var detectedProviders: Set<String> = []
+
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let publishSideEffects: Bool
 
     private enum PersistKey {
         static func lastGood(_ name: String) -> String { "lastGood.\(name).v1" }
         static let updated = "lastGoodUpdated.v1"
     }
 
-    private init() { loadLastGood() }
+    init(defaults: UserDefaults = .standard, publishSideEffects: Bool = true) {
+        self.defaults = defaults
+        self.publishSideEffects = publishSideEffects
+        let disabled = Self.loadDisabledProviders(defaults: defaults)
+        self.disabledProviders = disabled
+        let pinned = Self.loadPinnedProvider(defaults: defaults)
+        self.pinnedProvider = pinned.flatMap { disabled.contains($0) ? nil : $0 }
+        self.menuBarStyle = Self.loadMenuBarStyle(defaults: defaults)
+        loadLastGood()
+    }
 
     /// Seed `lastGood` and the visible rows from disk so the menu has data the
     /// instant it opens, before the first (possibly throttled) probe returns.
@@ -165,7 +260,7 @@ final class UsageStore {
     /// seeding is to skip an empty first paint, not to reanimate numbers from
     /// last week.
     private func loadLastGood() {
-        let defaults = UserDefaults.standard
+        let defaults = self.defaults
         // Clean up keys left behind by the retired Gemini Code Assist client.
         defaults.removeObject(forKey: PersistKey.lastGood("Gemini"))
         defaults.removeObject(forKey: "geminiProject.v1")
@@ -173,7 +268,8 @@ final class UsageStore {
         let lastPass = defaults.object(forKey: PersistKey.updated) as? Date
         var seeded: [ProviderUsage] = []
         for provider in registry {
-            guard let data = defaults.data(forKey: PersistKey.lastGood(provider.name)),
+            guard isProviderEnabled(provider.name),
+                let data = defaults.data(forKey: PersistKey.lastGood(provider.name)),
                 var usage = try? decoder.decode(ProviderUsage.self, from: data)
             else { continue }
             // A snapshot from a build that predates `capturedAt` carries no
@@ -186,6 +282,7 @@ final class UsageStore {
                     lastPass: lastPass, windows: usage.allWindows)
             }
             guard !Self.isExpired(usage) else { continue }
+            detectedProviders.insert(provider.name)
             states[provider.name, default: .init()].lastGood = usage
             // The displayed copy admits its age once that age is worth naming:
             // data restored from disk shouldn't render as live just because the
@@ -204,7 +301,7 @@ final class UsageStore {
     }
 
     private func persistLastGood() {
-        let defaults = UserDefaults.standard
+        let defaults = self.defaults
         let encoder = JSONEncoder()
         for provider in registry {
             let key = PersistKey.lastGood(provider.name)
@@ -569,11 +666,12 @@ final class UsageStore {
         isLoading = true
         defer { isLoading = false }
 
-        // Kick off every due provider's fetch concurrently. A provider is due when
-        // forced, never attempted, or its throttle interval has elapsed since the
-        // last attempt (the interval widens with each consecutive failure).
+        // Kick off every due, enabled provider's fetch concurrently. Disabled
+        // providers are never probed; enabled ones are due when forced, never
+        // attempted, or past their throttle interval.
         var tasks: [String: Task<ProviderUsage, Never>] = [:]
         for provider in registry {
+            guard isProviderEnabled(provider.name) else { continue }
             let state = states[provider.name] ?? .init()
             let due: Bool
             if force || state.lastAttempt == nil {
@@ -589,10 +687,19 @@ final class UsageStore {
         }
 
         // Resolve in registry order so the section order stays stable. Providers
-        // skipped this pass reuse their last good snapshot.
+        // skipped this pass reuse their last good snapshot; disabled ones stay
+        // hidden even if an in-flight fetch just finished for them.
         var resolved: [ProviderUsage] = []
         for provider in registry {
             let name = provider.name
+            guard isProviderEnabled(name) else {
+                let hidden = ProviderUsage.notDetected(name)
+                states[name, default: .init()].lastGood = nil
+                states[name, default: .init()].lastResolved = hidden
+                states[name]?.lastFailureReason = nil
+                resolved.append(hidden)
+                continue
+            }
             guard let task = tasks[name] else {
                 // Not due this pass — reuse whatever was last shown (which may be
                 // `.notDetected`, i.e. hidden) rather than a fabricated placeholder.
@@ -606,6 +713,20 @@ final class UsageStore {
                 continue
             }
             let fresh = await task.value
+            // Re-check in case the user turned this provider off mid-fetch.
+            guard isProviderEnabled(name) else {
+                let hidden = ProviderUsage.notDetected(name)
+                states[name, default: .init()].lastGood = nil
+                states[name, default: .init()].lastResolved = hidden
+                states[name]?.lastFailureReason = nil
+                resolved.append(hidden)
+                continue
+            }
+            if fresh.detected {
+                detectedProviders.insert(name)
+            } else {
+                detectedProviders.remove(name)
+            }
             states[name, default: .init()].failureStreak =
                 fresh.allWindows.isEmpty ? (states[name]?.failureStreak ?? 0) + 1 : 0
             let resolvedValue = resolve(fresh, name: name)

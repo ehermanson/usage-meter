@@ -19,9 +19,15 @@ struct MenuContentView: View {
             case .limits:
                 limits
             case .tokens:
-                ActivityView(activity: activity, metric: .tokens, style: store.style(for:))
+                ActivityView(
+                    activity: activity, metric: .tokens, style: store.style(for:),
+                    allProvidersDisabled: !store.disabledProviders.isEmpty
+                        && store.manageableProviders.allSatisfy { !store.isProviderEnabled($0) })
             case .cost:
-                ActivityView(activity: activity, metric: .cost, style: store.style(for:))
+                ActivityView(
+                    activity: activity, metric: .cost, style: store.style(for:),
+                    allProvidersDisabled: !store.disabledProviders.isEmpty
+                        && store.manageableProviders.allSatisfy { !store.isProviderEnabled($0) })
             }
 
             settingsCard
@@ -103,14 +109,17 @@ struct MenuContentView: View {
         }
     }
 
-    // Shown when none of the supported tools are installed on this machine — the
-    // app has nothing to track. A calm note rather than an error or install nudge.
+    // Shown when none of the supported tools are installed — or all detected
+    // ones were turned off in Settings. A calm note rather than an error.
     private var noProvidersDetected: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("No usage to show")
+        let allDisabled = !store.disabledProviders.isEmpty
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(allDisabled ? "All providers turned off" : "No usage to show")
                 .font(.system(size: 12, weight: .semibold))
             Text(
-                "Usage Meter tracks your limits once Claude Code, Codex, or Antigravity is set up on this Mac."
+                allDisabled
+                    ? "Turn a provider back on under Providers below to resume tracking."
+                    : "Usage Meter tracks your limits once Claude Code, Codex, or Antigravity is set up on this Mac."
             )
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
@@ -160,6 +169,10 @@ struct MenuContentView: View {
                         .onChange(of: launchAtLogin) { _, newValue in
                             applyLaunchAtLogin(newValue)
                         }
+                }
+
+                if !store.manageableProviders.isEmpty {
+                    settingRow("Providers") { providersPicker }
                 }
 
                 // Only offered once Claude Code was detected — for setups where
@@ -258,6 +271,30 @@ struct MenuContentView: View {
         .controlSize(.small)
         .fixedSize()
         .help("How much the menu-bar item shows. The full numbers are always here in the dropdown.")
+    }
+
+    /// Turns tracking on or off per detected provider across Limits, the menu
+    /// bar, Tokens/Cost, and iPhone sync. Disabled providers stay in the menu
+    /// (unchecked) so they can be re-enabled anytime.
+    private var providersPicker: some View {
+        Menu {
+            ForEach(store.manageableProviders, id: \.self) { name in
+                let enabled = store.isProviderEnabled(name)
+                Button {
+                    store.setProviderEnabled(name, !enabled)
+                } label: {
+                    pickerRow(name, checked: enabled)
+                }
+            }
+        } label: {
+            Text(store.providersSummaryLabel)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .controlSize(.small)
+        .fixedSize()
+        .help("Choose which detected providers Usage Meter tracks.")
     }
 
     /// "Auto" resolves the Claude config dir the way the user's terminal would;

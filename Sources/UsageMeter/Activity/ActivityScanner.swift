@@ -140,13 +140,16 @@ final class ActivityScanner: @unchecked Sendable {
         buffer.deallocate()
     }
 
-    func scan(now: Date = .now) async -> ActivityScanResult {
+    func scan(now: Date = .now, excludedProviders: Set<String> = []) async -> ActivityScanResult {
         await withCheckedContinuation { continuation in
-            queue.async { continuation.resume(returning: self.scanOnQueue(now: now)) }
+            queue.async {
+                continuation.resume(
+                    returning: self.scanOnQueue(now: now, excludedProviders: excludedProviders))
+            }
         }
     }
 
-    private func scanOnQueue(now: Date) -> ActivityScanResult {
+    private func scanOnQueue(now: Date, excludedProviders: Set<String>) -> ActivityScanResult {
         dispatchPrecondition(condition: .onQueue(queue))
         let started = Date.now
         var seen = Set<String>()
@@ -157,6 +160,7 @@ final class ActivityScanner: @unchecked Sendable {
         let cutoff = now.addingTimeInterval(-maxAge).timeIntervalSince1970
 
         for (index, source) in sources.enumerated() {
+            guard !excludedProviders.contains(source.name) else { continue }
             let paths = source.logFiles()
             if !paths.isEmpty { detected.insert(source.name) }
             for url in paths {

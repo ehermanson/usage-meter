@@ -13,7 +13,7 @@ import Observation
 @MainActor
 @Observable
 final class ActivityStore {
-    static let shared = ActivityStore()
+    static let shared = ActivityStore(disabledProviders: UsageStore.loadDisabledProviders())
 
     /// Which window the tabs show. Persisted, and shared by both tabs so
     /// flipping between tokens and cost compares like with like.
@@ -53,6 +53,9 @@ final class ActivityStore {
     @ObservationIgnored private var refreshToken = 0
     @ObservationIgnored private var priceAttempt: Date?
     @ObservationIgnored private var isFetchingPrices = false
+    /// Providers excluded by the user in Settings; skipped by the scanner and
+    /// filtered out of summaries immediately when toggled.
+    @ObservationIgnored private var disabledProviders: Set<String>
 
     private struct Scanned {
         /// The scan's generation these came from; see `ActivityScanResult`.
@@ -66,10 +69,30 @@ final class ActivityStore {
     /// rewrite the app's cache.
     init(
         scanner: ActivityScanner = ActivityScanner(),
-        priceCache: URL = ModelPriceCatalog.cacheFile
+        priceCache: URL = ModelPriceCatalog.cacheFile,
+        disabledProviders: Set<String> = []
     ) {
         self.scanner = scanner
         self.priceCache = priceCache
+        self.disabledProviders = disabledProviders
+    }
+
+    /// Updates the set of disabled providers. Re-aggregates synchronously so
+    /// Tokens/Cost hide a turned-off provider right away, and triggers a scan
+    /// when a previously disabled provider is turned back on.
+    func setDisabledProviders(_ disabled: Set<String>) {
+        guard disabled != disabledProviders else { return }
+        let reenabled = disabledProviders.subtracting(disabled)
+        disabledProviders = disabled
+        reaggregate()
+        if !reenabled.isEmpty,
+            scanned != nil || UsageStore.shared.scansActivityAhead()
+                || CompanionPublisher.shared.enabled
+        {
+            Task { await refresh(force: true) }
+        } else if CompanionPublisher.shared.enabled {
+            Task { await exportCompanionActivity() }
+        }
     }
 
     private static func loadRange() -> ActivityRange {
@@ -109,12 +132,13 @@ final class ActivityStore {
         let priceCache = priceCache
         let loadPrices = pricing == nil
         let previous = scanned
+        let excluded = disabledProviders
         // Utility priority: this is background bookkeeping, and a cold scan
         // reads gigabytes — it shouldn't compete with anything the user is
         // looking at. (The scan itself runs on the scanner's own queue.)
         let (fresh, prices) = await Task.detached(priority: .utility) {
             let prices = loadPrices ? ModelPriceCatalog.loadCached(from: priceCache) : nil
-            let result = await scanner.scan()
+            let result = await scanner.scan(excludedProviders: excluded)
             // Deduped here, off the main actor and once per scan, so a range
             // change or a price refresh doesn't redo it. A warm scan that
             // found nothing new hands back the same records, which dedupe to
@@ -143,9 +167,13 @@ final class ActivityStore {
     /// line means a range change never shows the previous range's numbers.
     private func reaggregate() {
         guard let scanned else { return }
+        let enabledProviders = ActivitySources.all.map(\.name).filter {
+            !disabledProviders.contains($0)
+        }
         summary = ActivityAggregator.summarize(
             deduped: scanned.records, range: range, now: .now, calendar: .current,
-            pricing: pricing ?? .bundled, detected: scanned.detected)
+            pricing: pricing ?? .bundled, providers: enabledProviders,
+            detected: scanned.detected.subtracting(disabledProviders))
     }
 
     /// Fetches fresh prices in the background when the cached table is over
@@ -176,6 +204,8 @@ final class ActivityStore {
         }
         let pricing = pricing ?? .bundled
         let calendar = Calendar.current
+        let excluded = disabledProviders
+        let enabledProviders = ActivitySources.all.map(\.name).filter { !excluded.contains($0) }
         let pricingUpdatedAt: Date?
         switch pricing.source {
         case .bundled: pricingUpdatedAt = nil
@@ -187,7 +217,8 @@ final class ActivityStore {
                 ranges: ActivityRange.allCases.map { range in
                     let summary = ActivityAggregator.summarize(
                         deduped: scanned.records, range: range, now: capturedAt,
-                        calendar: calendar, pricing: pricing, detected: scanned.detected)
+                        calendar: calendar, pricing: pricing, providers: enabledProviders,
+                        detected: scanned.detected.subtracting(excluded))
                     return CompanionActivityRange(
                         range: CompanionRange(rawValue: range.rawValue)!,
                         bucketStarts: summary.bucketStarts,

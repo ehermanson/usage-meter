@@ -47,6 +47,8 @@ struct ActivityView: View {
     /// Accent and logo for a provider, from `UsageStore` so a provider looks
     /// the same here as on its limits card.
     let style: (String) -> (accent: Color, logoResource: String?)
+    /// True when every detected provider has been turned off in Settings.
+    var allProvidersDisabled = false
 
     var body: some View {
         if let summary = activity.summary {
@@ -256,15 +258,17 @@ struct ActivityView: View {
 
     // MARK: - States
 
-    /// Shown when neither tool has left a log on this Mac. A calm note, like
-    /// the Limits tab's, rather than an error: there's simply nothing to add up.
+    /// Shown when neither tool has left a log on this Mac, or all providers were
+    /// turned off in Settings. A calm note, like the Limits tab's.
     private var noSources: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("No session logs found")
+            Text(allProvidersDisabled ? "All providers turned off" : "No session logs found")
                 .font(.system(size: 12, weight: .semibold))
             Text(
-                "Tokens and cost are read from the logs Claude Code, Codex, and Antigravity keep on this Mac. "
-                    + "None has left one here yet."
+                allProvidersDisabled
+                    ? "Turn a provider back on under Providers below to resume tracking."
+                    : "Tokens and cost are read from the logs Claude Code, Codex, and Antigravity keep on this Mac. "
+                        + "None has left one here yet."
             )
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
